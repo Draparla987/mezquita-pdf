@@ -1,0 +1,9 @@
+PySide6>=6.8
+PyMuPDF>=1.25
+pyHanko>=0.25
+pyhanko-certvalidator>=0.26
+pillow>=10
+aiohttp>=3.9
+qtawesome>=1.3
+pyobjc-framework-Cocoa>=10; sys_platform == "darwin"
+pyobjc-framework-Security>=10; sys_platform == "darwin"

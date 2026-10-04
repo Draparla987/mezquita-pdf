@@ -1,0 +1,58 @@
+name: Compilar Mezquita PDF (Mac)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    name: Mac (${{ matrix.arquitectura }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arquitectura: apple-silicon
+          - runner: macos-15-intel
+            arquitectura: intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Pruebas
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python pruebas/prueba_basica.py
+
+      - name: Crear la aplicación
+        run: pyinstaller --noconfirm --clean MezquitaPDF.spec
+
+      - name: Firma ad hoc y DMG
+        run: |
+          codesign --force --deep --sign - "dist/Mezquita PDF.app"
+          ./recursos/crear_dmg.sh "MezquitaPDF-${{ matrix.arquitectura }}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MezquitaPDF-${{ matrix.arquitectura }}
+          path: MezquitaPDF-*.dmg
+
+      - name: Publicar en Releases (solo etiquetas v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MezquitaPDF-*.dmg
