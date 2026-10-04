@@ -5,7 +5,7 @@
 #   ./ReinstalarEnIPhone.command --auto  → modo automático (tarea diaria): solo actúa si
 #       han pasado 5 días o más desde la última vez y avisa con una notificación.
 set -o pipefail
-export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$(dirname "$0")/web" || exit 1
 
 AUTO=0; [ "$1" == "--auto" ] && AUTO=1
