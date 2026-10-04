@@ -1,0 +1,8 @@
+node_modules
+dist
+# Recursos de pdf.js copiados automáticamente desde node_modules (npm run dev / build)
+public/pdfjs
+# Resultados de las pruebas
+pruebas/salida
+*.log
+.DS_Store

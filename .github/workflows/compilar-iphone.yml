@@ -1,0 +1,54 @@
+name: Compilar Mezquita PDF (web e iPhone)
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", "visor/firma_digital.py", ".github/workflows/compilar-iphone.yml"]
+  pull_request:
+    paths: ["web/**"]
+  workflow_dispatch:
+
+jobs:
+  web-iphone:
+    name: Web + app de iPhone (simulador)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: pyHanko (para validar las firmas de la prueba)
+        run: pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Compilar la versión web
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prueba de firma (validada con pyHanko)
+        working-directory: web
+        env:
+          PYTHON: python
+        run: npm run prueba:firma
+
+      - name: Compilar la app de iPhone para el simulador
+        working-directory: web
+        run: |
+          npx cap sync ios
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios/App/build CODE_SIGNING_ALLOWED=NO | tail -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MezquitaPDF-web
+          path: web/dist

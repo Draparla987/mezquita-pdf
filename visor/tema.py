@@ -333,15 +333,24 @@ def dibujar_arco(p: QPainter, r: QRectF, color_a: QColor, color_b: QColor,
     return vano
 
 
-def imagen_icono_app(tam: int = 1024) -> QImage:
-    """Icono de la aplicación: arco de la Mezquita con un documento firmado en el vano."""
+def imagen_icono_app(tam: int = 1024, sin_margen: bool = False) -> QImage:
+    """Icono de la aplicación: arco de la Mezquita con un documento firmado en el vano.
+
+    `sin_margen` genera la versión cuadrada a sangre que pide iOS (el sistema redondea las esquinas).
+    """
     img = QImage(tam, tam, QImage.Format_ARGB32)
     img.fill(Qt.transparent)
     p = QPainter(img)
     p.setRenderHint(QPainter.Antialiasing)
     s = tam / 1024
+    if sin_margen:
+        p.scale(1024 / 824, 1024 / 824)
+        p.translate(-100 * s, -100 * s)
     fondo = QPainterPath()
-    fondo.addRoundedRect(QRectF(100 * s, 100 * s, 824 * s, 824 * s), 185 * s, 185 * s)
+    if sin_margen:
+        fondo.addRect(QRectF(90 * s, 90 * s, 844 * s, 844 * s))
+    else:
+        fondo.addRoundedRect(QRectF(100 * s, 100 * s, 824 * s, 824 * s), 185 * s, 185 * s)
     g = QLinearGradient(0, 100 * s, 0, 924 * s)
     g.setColorAt(0, QColor("#A3263A"))
     g.setColorAt(1, QColor("#5E0F1C"))
