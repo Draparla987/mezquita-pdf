@@ -1,19 +1,32 @@
 # Mezquita PDF
 
-Visor y editor de PDF para macOS, al estilo de Adobe Reader, con **firma manuscrita**,
+Visor y editor de PDF para **Mac e iPhone**, al estilo de Adobe Reader, con **firma manuscrita**,
 **firma electrónica con certificado digital** (FNMT, ACCV, Izenpe, Camerfirma…) y opciones
 para **compartir por correo o WhatsApp**. Su imagen (granate y crema, arcos de herradura) se
 inspira en la Mezquita de Córdoba; se adapta automáticamente al modo claro u oscuro del Mac.
 
-## Cómo abrirlo
+## Instalar en el Mac
 
-- **Aplicación:** `dist/Mezquita PDF.app` (doble clic). Para instalarla en Aplicaciones:
-  `./construir_app.sh --instalar`
-- **Desde el código:** doble clic en `MezquitaPDF.command` (o `./MezquitaPDF.command archivo.pdf`).
+1. Abre **`MezquitaPDF.dmg`** (o descárgalo de la pestaña *Actions* del repositorio: elige
+   `MezquitaPDF-apple-silicon` para Mac con chip M1/M2/M3… o `MezquitaPDF-intel`).
+2. Arrastra **Mezquita PDF** a la carpeta **Aplicaciones**.
+3. Ábrela desde Aplicaciones o Launchpad. Si macOS avisa de que no puede comprobar el
+   desarrollador (pasa con el `.dmg` descargado de GitHub): clic derecho sobre la app →
+   **Abrir** → **Abrir**. Solo la primera vez.
 
-La primera vez, macOS puede avisar de que la app no está verificada: clic derecho → **Abrir**.
-Para usarla como visor de PDF predeterminado: en Finder, selecciona un PDF → ⌘I →
-*Abrir con* → Mezquita PDF → **Cambiar todo…**
+Atajo para quien compila en su Mac: `./construir_app.sh --instalar` la copia a Aplicaciones.
+Desde el código sin compilar: `./MezquitaPDF.command`.
+
+## Abrir los PDF con Mezquita PDF por defecto
+
+- **Mac:** en la pantalla de inicio de la app aparece «Usar por defecto» (o menú
+  *Ayuda → Usar Mezquita PDF como app predeterminada para PDF*). Desde ese momento, el doble
+  clic en cualquier PDF lo abre en Mezquita PDF. Alternativa manual: Finder → selecciona un PDF
+  → ⌘I → *Abrir con* → Mezquita PDF → **Cambiar todo…**
+- **iPhone (iOS 27):** en *Archivos*, mantén pulsado un PDF → **Obtener información** →
+  *Abrir siempre con esta aplicación* → **Mezquita PDF** → **Abrir siempre archivos Documento
+  PDF**. A partir de ahí, tocar un PDF en Archivos lo abre en la app. También aparece en
+  *Abrir con* y en el menú *Compartir* de Mail, WhatsApp, etc.
 
 ## Qué puede hacer
 
@@ -83,6 +96,19 @@ AC RAIZ FNMT-RCM, ACCV, Izenpe y Firmaprofesional.
   a pedir permiso para usar el certificado.
 - La verificación no consulta la revocación del certificado (OCSP/CRL) en Internet.
 - Los PDF escaneados no tienen texto seleccionable (no incluye OCR).
+
+## App de iPhone
+
+Está en `web/`: la misma interfaz como app web (PWA) y, empaquetada con Capacitor, como app
+nativa de iPhone (`web/ios/`). Ver [web/README.md](web/README.md).
+
+Para instalarla en tu iPhone:
+1. En Xcode → *Ajustes → Cuentas*, añade tu Apple ID.
+2. Conecta el iPhone por cable (la primera vez, acepta «Confiar en este ordenador» y activa el
+   *Modo de desarrollador* en *Ajustes → Privacidad y seguridad*).
+3. `cd web && npm run build && npx cap sync ios && npx cap open ios`, elige tu iPhone y pulsa ▶.
+   Con una cuenta gratuita la app caduca a los 7 días (se vuelve a instalar igual); con
+   Apple Developer (99 €/año) dura un año y permite TestFlight.
 
 ## Llevarla a otros Mac
 

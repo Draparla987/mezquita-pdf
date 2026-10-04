@@ -389,7 +389,35 @@ class PantallaBienvenida(QWidget):
         centro.addSpacing(4)
         centro.addWidget(pista)
         externa.addLayout(centro)
-        externa.addSpacing(30)
+        externa.addSpacing(18)
+
+        # Aviso: hacerla app predeterminada para PDF (solo si procede)
+        self.aviso = QFrame()
+        self.aviso.setObjectName("avisoBienvenida")
+        self.aviso.setMaximumWidth(620)
+        ca = QHBoxLayout(self.aviso)
+        ca.setContentsMargins(14, 10, 10, 10)
+        ca.setSpacing(12)
+        self.aviso_icono = QLabel()
+        ca.addWidget(self.aviso_icono)
+        self.aviso_texto = QLabel()
+        self.aviso_texto.setWordWrap(True)
+        ca.addWidget(self.aviso_texto, 1)
+        self.aviso_boton = QPushButton()
+        self.aviso_boton.setObjectName("primario")
+        self.aviso_boton.setCursor(Qt.PointingHandCursor)
+        ca.addWidget(self.aviso_boton)
+        self.aviso_cerrar = QToolButton()
+        self.aviso_cerrar.setToolTip("No volver a preguntar")
+        self.aviso_cerrar.setCursor(Qt.PointingHandCursor)
+        ca.addWidget(self.aviso_cerrar)
+        self.aviso.hide()
+        fila_aviso = QHBoxLayout()
+        fila_aviso.addStretch()
+        fila_aviso.addWidget(self.aviso)
+        fila_aviso.addStretch()
+        externa.addLayout(fila_aviso)
+        externa.addSpacing(14)
 
         self.caja_recientes = QWidget()
         self.caja_recientes.setMaximumWidth(620)
@@ -408,6 +436,28 @@ class PantallaBienvenida(QWidget):
         pie.setStyleSheet("font-size: 11px;")
         pie.setAlignment(Qt.AlignCenter)
         externa.addWidget(pie)
+
+    def mostrar_aviso(self, texto: str, texto_boton: str, al_aceptar, al_cerrar) -> None:
+        p = tema.paleta()
+        self.aviso.setStyleSheet(
+            f"QFrame#avisoBienvenida {{ background: {p.acento_suave}; border: 1px solid {p.borde}; border-radius: 12px; }}"
+            f"QFrame#avisoBienvenida QLabel {{ background: transparent; color: {p.texto}; }}"
+        )
+        self.aviso_icono.setPixmap(tema.icono("file-pdf-box", p.acento).pixmap(26, 26))
+        self.aviso_texto.setText(texto)
+        self.aviso_boton.setText(texto_boton)
+        tema.poner_icono(self.aviso_cerrar, "close", p.texto_suave)
+        for senal in (self.aviso_boton.clicked, self.aviso_cerrar.clicked):
+            try:
+                senal.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+        self.aviso_boton.clicked.connect(al_aceptar)
+        self.aviso_cerrar.clicked.connect(al_cerrar)
+        self.aviso.show()
+
+    def ocultar_aviso(self) -> None:
+        self.aviso.hide()
 
     def actualizar_recientes(self, rutas: list[str]) -> None:
         while self.capa_recientes.count():

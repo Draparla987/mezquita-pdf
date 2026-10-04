@@ -102,6 +102,15 @@ export class CapaAnotaciones {
     raiz.addEventListener('pointerup', (e) => this.arriba(e));
     raiz.addEventListener('pointercancel', () => this.cancelar());
     raiz.addEventListener('dblclick', (e) => this.doble(e));
+    // iOS: con una herramienta de dibujo, un dedo sobre la página nunca debe desplazar el
+    // documento (touch-action llega tarde si el gesto empieza muy rápido). Dos dedos: zoom.
+    raiz.addEventListener('touchstart', (e) => {
+      const h = this.ctx.herramienta();
+      const dibuja = h === 'dibujar' || h === 'resaltar' || h === 'rectangulo' || h === 'cajaFirma';
+      if (dibuja && e.touches.length === 1 && (e.target as HTMLElement).closest?.('.pagina') && this.ctx.editable()) {
+        e.preventDefault();
+      }
+    }, { passive: false });
   }
 
   /** Llamado por el visor al crear cada página. */
@@ -356,6 +365,10 @@ export class CapaAnotaciones {
         this.tocar(e, g);
         return;
       case 'dibujo': {
+        // El último tramo (entre el último pointermove y el pointerup) también cuenta.
+        const fin = this.ctx.visor.aUnidades(g.pagina, e.clientX, e.clientY);
+        const n = g.puntos.length;
+        if (n < 2 || g.puntos[n - 2] !== fin.x || g.puntos[n - 1] !== fin.y) g.puntos.push(fin.x, fin.y);
         const puntos = simplificar(g.puntos, 0.35);
         this.ctx.anadir({ id: nuevoId(), pagina: g.pagina.indice, tipo: 'trazo', puntos, color: this.ctx.color(), grosor: this.ctx.grosor() });
         return;

@@ -3,6 +3,7 @@ import * as almacen from './almacen';
 import type { DocReciente } from './almacen';
 import { icono } from './iconos';
 import { elegirFirma } from './pad-firma';
+import { esNativo } from './nativo';
 import { frisoSvg, NOMBRE_APP, VERSION } from './tema';
 import { confirmar, el, fechaRelativa, tamLegible } from './ui/componentes';
 
@@ -12,6 +13,7 @@ export interface AccionesBienvenida {
 }
 
 function esIosSinInstalar(): boolean {
+  if (esNativo) return false; // ya es una app instalada
   const nav = navigator as Navigator & { standalone?: boolean };
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   return ios && nav.standalone === false;

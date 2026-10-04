@@ -53,15 +53,20 @@ export async function compartirNativo(bytes: Uint8Array, nombre: string): Promis
 /** Escucha los PDF que otras apps abren con Mezquita PDF (incluido el arranque en frío). */
 export async function escucharAperturas(abrir: (archivo: File) => void | Promise<void>): Promise<void> {
   if (!esNativo) return;
+  // El mismo PDF puede llegar dos veces al arrancar (URL de inicio + copia de la parte nativa).
+  let ultimo = { clave: '', t: 0 };
   const procesar = async (url: string | undefined) => {
     if (!url || !url.startsWith('file:')) return;
     try {
       const { data } = await Filesystem.readFile({ path: url });
       const bytes = typeof data === 'string' ? deBase64(data) : new Uint8Array(await data.arrayBuffer());
       const nombre = decodeURIComponent(url.split('/').pop() || 'documento.pdf');
+      const clave = `${nombre}:${bytes.length}`;
+      if (clave === ultimo.clave && Date.now() - ultimo.t < 5000) return;
+      ultimo = { clave, t: Date.now() };
       await abrir(new File([bytes as BlobPart], nombre, { type: 'application/pdf' }));
-    } catch (e) {
-      console.error('No se pudo abrir el archivo recibido', e);
+    } catch {
+      // URL de otra app sin permiso de lectura: la parte nativa ya envía una copia legible.
     }
   };
   await App.addListener('appUrlOpen', ({ url }) => void procesar(url));

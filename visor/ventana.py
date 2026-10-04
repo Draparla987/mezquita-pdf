@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 import pymupdf
-from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QImage, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from . import compartir, tema
+from . import compartir, sistema, tema
 from . import firma_digital as fd
 from .componentes import (
     BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
@@ -129,6 +129,11 @@ class _Recolocador(QObject):
         if ev.type() in (QEvent.Resize, QEvent.Show):
             self.funcion()
         return False
+
+
+class _Puente(QObject):
+    """Lleva a la interfaz las respuestas que macOS entrega en otro hilo."""
+    resultado = Signal(object)
 
 
 class VentanaPrincipal(QMainWindow):
@@ -289,6 +294,10 @@ class VentanaPrincipal(QMainWindow):
             self.menu_firmar.addSeparator() if a is None else self.menu_firmar.addAction(a)
 
         m = mb.addMenu("Ay&uda")
+        self.a_predeterminada = m.addAction("Usar Mezquita PDF como app predeterminada para PDF",
+                                            self.hacer_predeterminada)
+        self.a_predeterminada.setEnabled(sistema.ruta_app() is not None)
+        m.addSeparator()
         self.a_acerca = m.addAction(f"Acerca de {tema.NOMBRE_APP}", self._acerca_de)
 
     # ------------------------------------------------------------------
@@ -649,7 +658,47 @@ class VentanaPrincipal(QMainWindow):
 
     def _mostrar_bienvenida(self) -> None:
         self.bienvenida.actualizar_recientes(self._recientes())
+        self._ofrecer_predeterminada()
         self.pila.setCurrentWidget(self.bienvenida)
+
+    # ------------------------------------------------------------------
+    # App predeterminada para PDF (macOS)
+    # ------------------------------------------------------------------
+    def _ofrecer_predeterminada(self) -> None:
+        if (sistema.ruta_app() is None or sistema.es_predeterminada()
+                or self.ajustes.value("no_ofrecer_predeterminada", False, type=bool)):
+            self.bienvenida.ocultar_aviso()
+            return
+        actual = sistema.app_predeterminada_pdf()
+        texto = ("<b>Abre tus PDF directamente con Mezquita PDF.</b><br>"
+                 + (f"Ahora se abren con {actual}." if actual else ""))
+        if not sistema.en_aplicaciones():
+            texto += "<br><small>Consejo: mueve antes la app a la carpeta Aplicaciones.</small>"
+        self.bienvenida.mostrar_aviso(texto, "Usar por defecto", self.hacer_predeterminada,
+                                      self._no_ofrecer_predeterminada)
+
+    def _no_ofrecer_predeterminada(self) -> None:
+        self.ajustes.setValue("no_ofrecer_predeterminada", True)
+        self.bienvenida.ocultar_aviso()
+
+    def hacer_predeterminada(self) -> None:
+        if sistema.ruta_app() is None:
+            self.aviso("Esta opción está disponible en la app instalada (Mezquita PDF.app)", 5)
+            return
+        self._puente = _Puente()
+        self._puente.resultado.connect(self._tras_predeterminada)
+        puente = self._puente
+        sistema.hacer_predeterminada(lambda error: puente.resultado.emit(error))
+
+    def _tras_predeterminada(self, error) -> None:
+        if error:
+            QMessageBox.warning(self, "App predeterminada",
+                                f"macOS no ha permitido el cambio:\n{error}\n\n"
+                                "También puedes hacerlo en Finder: selecciona un PDF → ⌘I → "
+                                "«Abrir con» → Mezquita PDF → «Cambiar todo…».")
+            return
+        self.bienvenida.ocultar_aviso()
+        self.aviso("Listo: los PDF se abrirán con Mezquita PDF al hacer doble clic", 5)
 
     def _escape(self) -> None:
         if self.campo_buscar.hasFocus():

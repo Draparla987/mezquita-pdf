@@ -4,7 +4,7 @@
  */
 
 export const NOMBRE_APP = 'Mezquita PDF';
-export const VERSION = '1.0.0';
+export const VERSION = '2.2.0';
 
 export const COLORES_RESALTADO = ['#FFD60A', '#8CE99A', '#74C0FC', '#FFA8C5', '#FFC078'];
 export const COLORES_TRAZO = ['#8E1B2C', '#E03131', '#1C7ED6', '#2F9E44', '#212529'];

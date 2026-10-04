@@ -1,7 +1,7 @@
 {
   "name": "mezquita-pdf-web",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.2.0",
   "type": "module",
   "description": "Mezquita PDF: visor, editor y firmador de PDF como aplicación web instalable (PWA)",
   "scripts": {

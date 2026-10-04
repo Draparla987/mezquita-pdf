@@ -153,3 +153,28 @@ pruebas/                 Pruebas automáticas
 - El pellizco se ha probado con eventos táctiles simulados en Chrome (emulación móvil), no en
   un iPhone físico. Con zoom muy alto, cada página se pinta con un máximo de 10 megapíxeles en móviles
   (límite de memoria de iOS), por lo que puede verse algo menos nítida.
+
+
+## App nativa de iPhone (Capacitor)
+
+La carpeta `ios/` contiene la app nativa generada con Capacitor 8 (Swift Package Manager, sin
+CocoaPods). Usa exactamente el mismo código web, más:
+
+- **«Abrir con» / app por omisión:** declara los PDF (`com.adobe.pdf`) y
+  `LSSupportsOpeningDocumentsInPlace`; `SceneDelegate.swift` copia el archivo con su permiso
+  temporal y se lo pasa a la web (`src/nativo.ts`).
+- **Compartir y guardar:** menú Compartir de iOS (WhatsApp, Mail, AirDrop, Guardar en
+  Archivos) con `@capacitor/share` + `@capacitor/filesystem`.
+- Sin service worker (los archivos ya van dentro de la app).
+
+```bash
+npm run build && npx cap sync ios   # copia la web a la app
+npx cap open ios                    # abre el proyecto en Xcode
+```
+
+Compilación para el simulador desde la terminal:
+
+```bash
+xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator \
+  -destination "generic/platform=iOS Simulator" CODE_SIGNING_ALLOWED=NO
+```

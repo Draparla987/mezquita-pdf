@@ -40,6 +40,9 @@ def diagnostico() -> int:
           f"(vigentes: {sum(c.utilizable for c in certs)})")
     print(f"Correo predeterminado: {compartir.app_correo_predeterminada() or 'desconocido'}")
     print(f"WhatsApp instalado: {compartir.whatsapp_instalado()}")
+    from visor import sistema
+    print(f"Los PDF se abren ahora con: {sistema.app_predeterminada_pdf() or 'desconocido'}"
+          f" · Mezquita PDF es la predeterminada: {sistema.es_predeterminada()}")
     return 0
 
 
