@@ -110,6 +110,12 @@ Para instalarla en tu iPhone:
    Con una cuenta gratuita la app caduca a los 7 días (se vuelve a instalar igual); con
    Apple Developer (99 €/año) dura un año y permite TestFlight.
 
+### Renovar la app del iPhone (cuenta gratuita, cada 7 días)
+
+Doble clic en **`ReinstalarEnIPhone.command`** con el iPhone desbloqueado y en el mismo Wi-Fi
+que el Mac (o conectado por cable). Firma de nuevo la app y la instala: vuelve a funcionar
+7 días más, sin perder documentos ni firmas.
+
 ## Llevarla a otros Mac
 
 El repositorio incluye un flujo de **GitHub Actions** (`.github/workflows/compilar-mac.yml`)
