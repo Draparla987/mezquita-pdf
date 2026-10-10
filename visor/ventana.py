@@ -1788,7 +1788,11 @@ class VentanaPrincipal(QMainWindow):
         caja.setInformativeText(
             "Visor y editor de PDF con firma manuscrita y firma electrónica con certificado.<br><br>"
             "Su imagen se inspira en los arcos de herradura de la Mezquita de Córdoba.<br><br>"
-            "<small>Construido con PySide6 (Qt), PyMuPDF y pyHanko.</small>"
+            "<small>Construido con PySide6 (Qt), PyMuPDF y pyHanko.</small><br><br>"
+            "<small>© 2026 Antonio P. Arenas de Larriva. Software libre bajo la licencia "
+            "GNU AGPL v3.0, distribuido SIN NINGUNA GARANTÍA.<br>"
+            "Código fuente, licencia y avisos de terceros: "
+            "<a href='https://github.com/Draparla987/mezquita-pdf'>github.com/Draparla987/mezquita-pdf</a></small>"
         )
         caja.exec()
 
