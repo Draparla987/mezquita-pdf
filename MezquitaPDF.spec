@@ -3,7 +3,8 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 datos = (collect_data_files("pyhanko") + collect_data_files("pyhanko_certvalidator")
-         + collect_data_files("qtawesome"))
+         + collect_data_files("qtawesome")
+         + [("LICENSE", "."), ("AVISOS_DE_TERCEROS.md", ".")])
 ocultos = (collect_submodules("pyhanko") + collect_submodules("pyhanko_certvalidator")
            + ["AppKit", "Foundation", "Security", "objc", "qtawesome"])
 
