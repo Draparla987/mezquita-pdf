@@ -151,3 +151,11 @@ pruebas/                Prueba de extremo a extremo (también se ejecuta en GitH
 ```
 
 Tecnologías: PySide6 (Qt 6), PyMuPDF (MuPDF), pyHanko, QtAwesome (iconos Material Design), PyObjC.
+
+## Licencia
+
+Mezquita PDF © 2026 Antonio P. Arenas de Larriva. Es software libre: puedes usarlo, copiarlo, modificarlo y redistribuirlo según la **GNU Affero General Public License v3.0** (archivo [`LICENSE`](LICENSE)). Se distribuye **sin ninguna garantía**: revisa siempre los documentos que firmes.
+
+La licencia AGPL viene de PyMuPDF/MuPDF, el motor de PDF de la app de Mac. Quien redistribuya Mezquita PDF, modificado o no, debe hacerlo bajo la misma licencia y poner el código fuente a disposición.
+
+Los componentes de terceros y sus licencias (Qt, pyHanko, PDF.js, pdf-lib, fuentes caligráficas…) están en [`AVISOS_DE_TERCEROS.md`](AVISOS_DE_TERCEROS.md). Los dos archivos se incluyen también dentro de la app de Mac.
