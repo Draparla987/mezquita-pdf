@@ -86,7 +86,7 @@ export function crearBienvenida(acciones: AccionesBienvenida): HTMLElement {
       ),
       recientes,
     ),
-    el('footer.pie-bienvenida', {}, `Versión ${VERSION} · inspirado en la Mezquita de Córdoba · todo se queda en tu dispositivo`),
+    el('footer.pie-bienvenida', {}, `Versión ${VERSION} · inspirado en la Mezquita de Córdoba · todo se queda en tu dispositivo · © 2026 Antonio P. Arenas de Larriva · software libre (AGPL-3.0), sin garantía · código en github.com/Draparla987/mezquita-pdf`),
   );
   requestAnimationFrame(() => {
     observador.observe(friso);
