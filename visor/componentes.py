@@ -10,7 +10,7 @@ from PySide6.QtCore import (
     QEasingCurve, QMimeData, QPoint, QPropertyAnimation, QRectF, QSettings, QSize, Qt, QTimer,
     QUrl, Signal,
 )
-from PySide6.QtGui import QColor, QDrag, QPainter, QPixmap
+from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout,
     QLabel, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
@@ -144,12 +144,16 @@ class BotonRail(QToolButton):
     def __init__(self, texto: str, nombre_icono: str, consejo: str = ""):
         super().__init__()
         self.setObjectName("botonRail")
-        self.setText(texto)
+        # Los rótulos largos («Firma manuscrita») van en dos líneas para caber en el carril
+        fuente = QFont(self.font())
+        fuente.setPixelSize(11)
+        dos_lineas = " " in texto and QFontMetrics(fuente).horizontalAdvance(texto) > 68
+        self.setText(texto.replace(" ", "\n", 1) if dos_lineas else texto)
         self.setCheckable(True)
         self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.setIconSize(QSize(20, 20))
         self.setFixedWidth(74)
-        self.setFixedHeight(46)
+        self.setFixedHeight(59 if dos_lineas else 46)
         self.setToolTip(consejo or texto)
         self.setCursor(Qt.PointingHandCursor)
         tema.poner_icono(self, nombre_icono, tema.paleta().texto_suave)

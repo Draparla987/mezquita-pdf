@@ -54,8 +54,8 @@ DEF_HERRAMIENTAS = {
     Herramienta.EDITAR_TEXTO: ("Editar texto", "text-box-edit-outline", "Cambiar el texto existente del PDF", "E"),
     Herramienta.TAPAR: ("Borrar zona", "selection-remove", "Eliminar de verdad el contenido de una zona", None),
     Herramienta.IMAGEN: ("Imagen", "image-outline", "Insertar una imagen", "I"),
-    Herramienta.FIRMA: ("Firmar", "signature-freehand", "Colocar tu firma manuscrita", "F"),
-    Herramienta.FIRMA_DIGITAL: ("Certificado", "file-certificate-outline", "Firmar con certificado digital", None),
+    Herramienta.FIRMA: ("Firma manuscrita", "signature-freehand", "Colocar tu firma manuscrita", "F"),
+    Herramienta.FIRMA_DIGITAL: ("Firma certificado", "file-certificate-outline", "Firmar con certificado digital", None),
     Herramienta.BORRADOR: ("Borrador", "eraser", "Eliminar anotaciones con un clic", "X"),
 }
 
