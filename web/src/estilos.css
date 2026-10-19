@@ -181,7 +181,7 @@ img { -webkit-user-drag: none; }
 .titulo-bienvenida { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin: 16px 0 4px; }
 .subtitulo-bienvenida { color: var(--texto-suave); font-size: 16px; margin: 0 0 22px; text-wrap: balance; }
 .acciones-bienvenida { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.acciones-bienvenida .boton.primario { min-width: 190px; }
+.acciones-bienvenida .boton { min-width: 190px; }
 .pista-arrastrar { color: var(--texto-suave); font-size: 12.5px; margin: 10px 0 0; }
 
 .tarjeta-instalar {
@@ -547,6 +547,39 @@ input[type="range"] { accent-color: var(--acento); }
 .avanzado[open] { display: flex; flex-direction: column; gap: 8px; }
 
 .lista-opciones { display: flex; flex-direction: column; gap: 10px; }
+
+/* Combinar documentos */
+.lista-combinar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lista-combinar:empty { display: none; }
+.fila-combinar {
+  display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px;
+  border: 1px solid var(--borde); border-radius: var(--radio-grande); background: var(--superficie);
+}
+.orden-combinar {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--acento); color: #FFFFFF; font-size: 12px; font-weight: 700;
+}
+.info-combinar {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left;
+  padding: 8px 4px; background: none; border: none; color: var(--acento); border-radius: var(--radio);
+}
+.info-combinar > span { display: flex; flex-direction: column; min-width: 0; color: var(--texto); }
+.info-combinar strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info-combinar small { color: var(--texto-suave); font-size: 12.5px; }
+.info-combinar .acento { color: var(--acento); font-weight: 600; }
+.info-combinar .aviso { color: var(--error); }
+.acciones-combinar { flex: none; display: flex; }
+.acciones-combinar .boton-icono { width: 38px; height: 40px; }
+.acciones-combinar .boton-icono:disabled { opacity: .3; }
+.vacio-combinar {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  padding: 28px 16px; border: 2px dashed var(--borde-fuerte); border-radius: var(--radio-grande);
+  color: var(--texto-suave);
+}
+.vacio-combinar strong { color: var(--texto); font-size: 15.5px; }
+.vacio-combinar span { font-size: 13.5px; }
+.anadir-combinar { width: 100%; margin-top: 12px; }
+.resumen-combinar { margin: 12px 2px 0; color: var(--texto-suave); font-size: 13.5px; min-height: 1em; }
 .opcion-grande {
   display: flex; align-items: center; gap: 14px; text-align: left; width: 100%;
   padding: 14px 16px; border-radius: var(--radio-grande); border: 1px solid var(--borde);

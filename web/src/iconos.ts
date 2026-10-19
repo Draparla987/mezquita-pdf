@@ -41,6 +41,10 @@ const RUTAS = {
   subir: '<path d="M12 20V9"/><path d="m7.5 13.5 4.5-4.5 4.5 4.5"/><path d="M5 4.5h14"/>',
   girar: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
   mover: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+  combinar: '<path d="M15.5 3H10a2 2 0 0 0-2 2v10.5a2 2 0 0 0 2 2h7.5a2 2 0 0 0 2-2V7z"/><path d="M15.5 3v4h4"/><path d="M8 6.5H6.5a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2H14a2 2 0 0 0 2-2v-1.5"/><path d="M11.5 10.5h4.5M11.5 13.5h3"/>',
+  imagen: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17.5 5-5 4 4 2.5-2.5 4.5 4.5"/>',
+  flechaArriba: '<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>',
+  flechaAbajo: '<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>',
 } as const;
 
 export type NombreIcono = keyof typeof RUTAS;

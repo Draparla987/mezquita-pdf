@@ -63,6 +63,7 @@ export function crearBienvenida(acciones: AccionesBienvenida): HTMLElement {
   };
 
   const abrir = el('button.boton.primario.grande', { type: 'button', html: `${icono('carpeta', 22)}<span>Abrir un PDF</span>`, onclick: acciones.abrir });
+  const combinar = el('button.boton.secundario.grande', { type: 'button', html: `${icono('combinar', 22)}<span>Combinar PDF</span>`, onclick: () => void import('./combinar').then((m) => m.hojaCombinar()) });
   const firmas = el('button.boton.secundario.grande', { type: 'button', html: `${icono('firma', 22)}<span>Mis firmas</span>`, onclick: () => void elegirFirma('Mis firmas', 'Se guardan solo en este dispositivo. Crea una nueva o borra las que no uses.') });
 
   const instalar = esIosSinInstalar() && !sessionStorage.getItem('ocultarInstalar')
@@ -80,7 +81,7 @@ export function crearBienvenida(acciones: AccionesBienvenida): HTMLElement {
         el('img.logo-grande', { src: './icons/logo-256.png', alt: '', width: '96', height: '96' }),
         el('h1.titulo-bienvenida', {}, NOMBRE_APP),
         el('p.subtitulo-bienvenida', {}, 'Abre, edita, firma y comparte tus documentos PDF'),
-        el('div.acciones-bienvenida', {}, abrir, firmas),
+        el('div.acciones-bienvenida', {}, abrir, combinar, firmas),
         el('p.pista-arrastrar', {}, 'o arrastra un archivo PDF a esta ventana'),
         instalar,
       ),

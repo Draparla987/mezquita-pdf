@@ -154,6 +154,11 @@ if (!esNativo && 'serviceWorker' in navigator && import.meta.env.PROD) {
 
 void almacen.pedirPersistencia();
 mostrarBienvenida();
+// Resultado de «Combinar documentos» (combinar.ts)
+document.addEventListener('mezquita:abrir-archivo', (e) => {
+  if (editor) editor.cerrar();
+  void abrirArchivo((e as CustomEvent<File>).detail);
+});
 // App de iPhone: PDF abiertos desde Archivos, Mail, WhatsApp… («Abrir en Mezquita PDF»)
 void escucharAperturas(async (archivo) => {
   if (editor) editor.cerrar();

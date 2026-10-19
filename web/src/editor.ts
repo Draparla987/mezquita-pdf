@@ -730,6 +730,7 @@ export class Editor {
     abrirMenu(ancla, 'Más opciones', [
       { texto: 'Guardar en Archivos', icono: 'descargar', detalle: 'Descarga una copia del PDF', accion: () => void this.guardarEnArchivos() },
       { texto: 'Compartir…', icono: 'compartir', accion: () => void this.compartir() },
+      { texto: 'Combinar con otros PDF…', icono: 'combinar', detalle: 'Crea un documento nuevo con este y otros', accion: () => void import('./combinar').then((m) => m.hojaCombinar({ nombre: this.nombreArchivo(), bytes: () => this.bytesParaGuardar() })) },
       { texto: 'Mis firmas', icono: 'firma', accion: () => void elegirFirma().then((f) => { if (f) { this.firmaActual = f; void almacen.fijarAjuste('firmaActual', f.id); this.setHerramienta('firma'); } }) },
       { texto: 'Mis certificados', icono: 'certificado', accion: () => void hojaCertificados() },
       ...(this.firmas.length ? [{ texto: 'Firmas del documento', icono: 'escudo' as NombreIcono, detalle: `${this.firmas.length} firma(s) digital(es)`, accion: () => hojaFirmasDocumento(this.firmas) }] : []),

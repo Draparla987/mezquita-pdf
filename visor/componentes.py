@@ -335,6 +335,7 @@ class PantallaBienvenida(QWidget):
     abrir_solicitado = Signal()
     reciente_solicitado = Signal(str)
     firmas_solicitado = Signal()
+    combinar_solicitado = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -378,7 +379,15 @@ class PantallaBienvenida(QWidget):
         firmas.setMinimumHeight(40)
         firmas.setCursor(Qt.PointingHandCursor)
         firmas.clicked.connect(self.firmas_solicitado)
+        combinar = QPushButton("  Combinar PDF")
+        tema.poner_icono(combinar, "file-document-multiple-outline")
+        combinar.setIconSize(QSize(18, 18))
+        combinar.setMinimumHeight(40)
+        combinar.setCursor(Qt.PointingHandCursor)
+        combinar.setToolTip("Unir varios PDF (o imágenes) en un documento nuevo")
+        combinar.clicked.connect(self.combinar_solicitado)
         fila.addWidget(abrir)
+        fila.addWidget(combinar)
         fila.addWidget(firmas)
         fila.addStretch()
         centro.addLayout(fila)

@@ -33,11 +33,12 @@ Desde el código sin compilar: `./MezquitaPDF.command`.
 | Ver | Editar | Firmar |
 |---|---|---|
 | Desplazamiento continuo, zoom (⌘+ / ⌘−, pellizco en el trackpad), ajustar al ancho o a la página | Resaltar, subrayar y tachar texto | Firma manuscrita: dibujada, escrita con letra caligráfica o desde una foto (se quita el fondo) |
-| Miniaturas (arrástralas para reordenar) y marcadores | Añadir texto, notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
+| Miniaturas (arrástralas para reordenar; ↑ ↓ para cambiar de página) y marcadores | Añadir texto, notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
 | Búsqueda (⌘F, Intro = siguiente) | **Editar texto existente** (clic en una línea) | Sello de tiempo de una TSA (opcional) |
 | Seleccionar y copiar texto | **Borrar zona** (elimina de verdad el contenido) | Verificación de firmas, con un aviso verde/rojo al abrir el documento |
 | Rellenar formularios y seguir enlaces | Insertar imágenes, borrar anotaciones (doble clic sobre un texto añadido para editarlo) | Certificar el documento (bloquea cambios) |
-| Documentos con contraseña | Girar, insertar, eliminar, mover y extraer páginas; combinar PDFs | |
+| Documentos con contraseña | Girar, insertar, eliminar, mover y extraer páginas | |
+| | **Combinar documentos**: varios PDF (y fotos o escaneos) en uno nuevo, en el orden y con las páginas que elijas | |
 | Imprimir (⌘P) | Deshacer/rehacer (⌘Z / ⇧⌘Z) | |
 
 ## Compartir
@@ -145,6 +146,7 @@ visor/llavero.py        Certificados del Llavero de macOS y firma sin exportar l
 visor/compartir.py      Correo, WhatsApp y servicios de compartir de macOS
 visor/tema.py           Paleta, estilos, iconos y logotipo (arco de la Mezquita)
 visor/componentes.py    Bienvenida, avisos, barras flotantes, diálogo de WhatsApp
+visor/combinar.py       Combinar documentos (diálogo y lógica)
 MezquitaPDF.spec        Configuración para crear la .app (PyInstaller)
 pruebas/                Prueba de extremo a extremo (también se ejecuta en GitHub)
 .github/workflows/      Compilación automática de los .dmg

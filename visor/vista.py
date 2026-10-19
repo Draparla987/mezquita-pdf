@@ -197,8 +197,9 @@ class VistaPDF(QScrollArea):
         self.setFrameShape(QFrame.NoFrame)
         self.setAlignment(Qt.AlignHCenter)
         self.contenedor.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.verticalScrollBar().valueChanged.connect(self._al_desplazar)
         self._ultima_pagina = -1
+        self._navegando = False
+        self.verticalScrollBar().valueChanged.connect(self._al_desplazar)
 
     # ------------------------------------------------------------------
     # Documento
@@ -211,6 +212,7 @@ class VistaPDF(QScrollArea):
     def recargar(self, conservar_posicion: bool = True) -> None:
         """Reconstruye las páginas tras un cambio en el documento."""
         pagina = self.pagina_actual() if conservar_posicion else 0
+        self._ultima_pagina = -1
         self._pixmaps.clear()
         self._palabras.clear()
         self._lineas.clear()
@@ -271,6 +273,12 @@ class VistaPDF(QScrollArea):
     # Navegación y zoom
     # ------------------------------------------------------------------
     def pagina_actual(self) -> int:
+        """La página que indica la barra de navegación (y sobre la que actúan los comandos)."""
+        if 0 <= self._ultima_pagina < len(self.paginas):
+            return self._ultima_pagina
+        return self._pagina_visible()
+
+    def _pagina_visible(self) -> int:
         if not self.paginas:
             return 0
         centro = self.verticalScrollBar().value() + self.viewport().height() // 3
@@ -280,7 +288,9 @@ class VistaPDF(QScrollArea):
         return len(self.paginas) - 1
 
     def _al_desplazar(self, _v) -> None:
-        p = self.pagina_actual()
+        if self._navegando:
+            return
+        p = self._pagina_visible()
         if p != self._ultima_pagina:
             self._ultima_pagina = p
             self.pagina_cambiada.emit(p)
@@ -292,9 +302,15 @@ class VistaPDF(QScrollArea):
         y = w.y() - MARGEN // 2
         if y_pdf is not None:
             y = w.y() + int(y_pdf * self.zoom) - self.viewport().height() // 3
-        self.verticalScrollBar().setValue(max(0, y))
-        self._ultima_pagina = -1
-        self._al_desplazar(0)
+        self._navegando = True
+        try:
+            self.verticalScrollBar().setValue(max(0, y))
+        finally:
+            self._navegando = False
+        # La página pedida pasa a ser la actual aunque no pueda subir hasta arriba del todo
+        # (las últimas páginas): así las miniaturas y el contador no «rebotan» a la anterior.
+        self._ultima_pagina = indice
+        self.pagina_cambiada.emit(indice)
 
     def set_zoom(self, zoom: float, ancla: QPoint | None = None) -> None:
         zoom = max(0.1, min(8.0, zoom))

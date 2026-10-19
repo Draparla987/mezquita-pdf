@@ -17,6 +17,7 @@ red posible es el sello de tiempo (TSA), que está desactivado por defecto.
 | Indicador «3 / 12» e «Ir a la página» | Seleccionar, mover, redimensionar y borrar anotaciones | Firma digital **PAdES** con certificado `.p12`/`.pfx`, con sello visible (rúbrica + datos) o invisible | Documentos recientes (se reabren con sus anotaciones pendientes) |
 | PDF con contraseña (se pide al abrir) | Deshacer / rehacer, «Borrar última» | Varias firmas seguidas sin invalidar las anteriores | |
 | Aviso verde/rojo con la comprobación de las firmas del documento | Al guardar: anotaciones aplanadas (por defecto) o editables | Motivo, lugar y sello de tiempo opcional | |
+| **Combinar documentos**: varios PDF o fotos en uno nuevo, ordenados y con las páginas que elijas | | | |
 
 ## Desarrollo
 
@@ -111,6 +112,7 @@ src/capa.ts              Capa SVG de anotaciones e interacción (Pointer Events)
 src/pad-firma.ts         Firma manuscrita dibujada o escrita; «Mis firmas»
 src/firma-digital-ui.ts  Certificados, opciones de firma, contraseña y verificación
 src/compartir.ts         navigator.share / descarga
+src/combinar.ts          Combinar varios PDF o fotos en un documento nuevo (pdf-lib)
 src/almacen.ts           IndexedDB (recientes, firmas, certificados, ajustes)
 src/tema.ts, iconos.ts   Arco de herradura en SVG e iconos de trazo
 src/estilos.css          Paleta clara/oscura, safe areas, diseño adaptable

@@ -25,7 +25,7 @@ app = BUNDLE(
     bundle_identifier="local.mezquitapdf.app",
     info_plist={
         "CFBundleDisplayName": "Mezquita PDF",
-        "CFBundleShortVersionString": "2.2.0",
+        "CFBundleShortVersionString": "2.3.0",
         "NSHighResolutionCapable": True,
         "NSRequiresAquaSystemAppearance": False,
         "LSMinimumSystemVersion": "11.0",

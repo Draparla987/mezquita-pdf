@@ -9,13 +9,33 @@ import pymupdf
 MAX_HISTORIAL = 40
 
 
+def parsear_rango(texto: str, total: int) -> list[int]:
+    """«1-3, 5, 8-» → índices de página (desde 0). Lanza ValueError si no es válido."""
+    paginas: list[int] = []
+    for parte in texto.replace(" ", "").split(","):
+        if not parte:
+            continue
+        if "-" in parte:
+            a, b = parte.split("-", 1)
+            a, b = int(a or 1), int(b or total)
+            if a > b:
+                a, b = b, a
+            paginas.extend(range(a, b + 1))
+        else:
+            paginas.append(int(parte))
+    if not paginas or any(p < 1 or p > total for p in paginas):
+        raise ValueError
+    return [p - 1 for p in paginas]
+
+
 class Documento:
-    def __init__(self, ruta: str | None = None, datos: bytes | None = None):
+    def __init__(self, ruta: str | None = None, datos: bytes | None = None, nombre: str | None = None):
         if datos is not None:
             self.doc = pymupdf.open(stream=datos, filetype="pdf")
         else:
             self.doc = pymupdf.open(ruta)
         self.ruta = ruta
+        self._nombre = nombre  # nombre sugerido mientras no se guarde (p. ej. «Combinado.pdf»)
         self.modificado = False
         # Las anotaciones y campos de PyMuPDF dejan de ser válidos (y pueden cerrar la
         # aplicación) si su página se libera: mantenemos vivas las páginas en caché.
@@ -26,7 +46,7 @@ class Documento:
     # --- Información -----------------------------------------------------
     @property
     def nombre(self) -> str:
-        return os.path.basename(self.ruta) if self.ruta else "Sin título.pdf"
+        return os.path.basename(self.ruta) if self.ruta else (self._nombre or "Sin título.pdf")
 
     @property
     def num_paginas(self) -> int:

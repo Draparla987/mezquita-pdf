@@ -251,8 +251,11 @@ export class Visor {
     this.anchoPrevio = ancho;
     if (this.ajuste) {
       const actual = this.paginaActual;
+      // Si se estaba al principio, se sigue al principio (aunque la 1.ª página sea corta, p. ej. apaisada)
+      const alPrincipio = this.raiz.scrollTop <= 1;
       this.ajustar();
-      this.irAPagina(actual);
+      if (alPrincipio) this.raiz.scrollTop = 0;
+      else this.irAPagina(actual);
     }
     this.programarRender();
   }
@@ -326,6 +329,7 @@ export class Visor {
       const d = this.paginas[i].div;
       if (d.offsetTop <= medio) actual = i;
     }
+    if (this.raiz.scrollTop <= 1) actual = 0; // arriba del todo: página 1 aunque sea corta
     if (actual !== this.paginaActual) {
       this.paginaActual = actual;
     }

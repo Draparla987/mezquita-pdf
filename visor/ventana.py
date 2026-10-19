@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from . import compartir, sistema, tema
 from . import firma_digital as fd
+from .combinar import DialogoCombinar
 from .componentes import (
     BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
     separador_vertical,
@@ -27,7 +28,7 @@ from .dialogos import (
     DialogoContrasena, DialogoFirmaDigital, DialogoFirmas, DialogoTexto, DialogoVerificacion,
     FUENTES_PDF,
 )
-from .documento import Documento
+from .documento import Documento, parsear_rango as _parsear_rango
 from .vista import Herramienta, VistaPDF, a_rgb
 
 FILTRO_PDF = "Documentos PDF (*.pdf);;Todos los archivos (*)"
@@ -96,6 +97,14 @@ def nueva_ventana(ruta: str | None = None) -> "VentanaPrincipal":
     if ruta:
         v.abrir_ruta(ruta)
     return v
+
+
+def mostrar_en_ventana(doc: Documento) -> None:
+    """Muestra un documento nuevo (aún sin guardar) en una ventana vacía o en una nueva."""
+    v = next((v for v in _ventanas if v.documento is None), None) or nueva_ventana()
+    v.mostrar_documento(doc)
+    v.raise_()
+    v.activateWindow()
 
 
 def abrir_en_ventana(ruta: str) -> None:
@@ -184,7 +193,8 @@ class VentanaPrincipal(QMainWindow):
         self.a_guardar = A("Guardar", self.guardar, QKeySequence.Save, "content-save-outline")
         self.a_guardar_como = A("Guardar como…", self.guardar_como, QKeySequence.SaveAs)
         self.a_imprimir = A("Imprimir…", self.imprimir, QKeySequence.Print, "printer-outline")
-        self.a_combinar = A("Combinar con otros PDF…", self.combinar, None, "file-document-multiple-outline")
+        self.a_combinar = A("Combinar documentos…", self.combinar, None, "file-document-multiple-outline",
+                            "Unir varios PDF (o imágenes) en un documento nuevo")
         self.a_propiedades = A("Propiedades del documento…", self.propiedades, "Ctrl+D", "information-outline")
         self.a_cerrar_doc = A("Cerrar documento", self.cerrar_documento, QKeySequence.Close)
         self.a_cerrar = A("Cerrar ventana", self.close, "Ctrl+Shift+W")
@@ -239,7 +249,7 @@ class VentanaPrincipal(QMainWindow):
         # Acciones que necesitan un documento abierto
         self._acciones_doc = [
             a for a in self.findChildren(QAction)
-            if a not in (self.a_abrir, self.a_cerrar, self.a_gestionar_firmas, self.a_cerrar_doc)
+            if a not in (self.a_abrir, self.a_cerrar, self.a_gestionar_firmas, self.a_cerrar_doc, self.a_combinar)
         ]
 
     def _crear_menus(self) -> None:
@@ -315,6 +325,7 @@ class VentanaPrincipal(QMainWindow):
         self.bienvenida.abrir_solicitado.connect(self.abrir)
         self.bienvenida.reciente_solicitado.connect(abrir_en_ventana)
         self.bienvenida.firmas_solicitado.connect(self.gestionar_firmas)
+        self.bienvenida.combinar_solicitado.connect(self.combinar)
         self.pila.addWidget(self.bienvenida)
 
         editor = QWidget()
@@ -371,7 +382,7 @@ class VentanaPrincipal(QMainWindow):
         capa.addSpacing(14)
         capa.addWidget(separador_vertical())
         capa.addSpacing(6)
-        for a in (self.a_panel, self.a_abrir, self.a_guardar, self.a_imprimir):
+        for a in (self.a_panel, self.a_abrir, self.a_guardar, self.a_imprimir, self.a_combinar):
             capa.addWidget(self._boton_barra(a))
         capa.addSpacing(6)
         capa.addWidget(separador_vertical())
@@ -508,7 +519,9 @@ class VentanaPrincipal(QMainWindow):
         self.miniaturas.setContextMenuPolicy(Qt.CustomContextMenu)
         self.miniaturas.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.miniaturas.customContextMenuRequested.connect(self._menu_miniatura)
-        self.miniaturas.itemClicked.connect(lambda it: self.vista.ir_a_pagina(self.miniaturas.row(it)))
+        # Con el ratón o con el teclado (flechas, AvPág/RePág): la vista sigue a la miniatura elegida
+        self.miniaturas.currentRowChanged.connect(self._miniatura_elegida)
+        self.miniaturas.itemClicked.connect(lambda it: self._miniatura_elegida(self.miniaturas.row(it)))
         self.miniaturas.model().rowsMoved.connect(self._miniatura_movida)
         self.panel_pila.addWidget(self.miniaturas)
 
@@ -890,18 +903,22 @@ class VentanaPrincipal(QMainWindow):
                 if doc.autenticar(dlg.campo.text()):
                     break
                 QMessageBox.warning(self, "Contraseña", "Contraseña incorrecta.")
+        self.mostrar_documento(doc)
+        return True
+
+    def mostrar_documento(self, doc: Documento) -> None:
         if self.documento is not None:
             self.documento.cerrar()
         self.documento = doc
         self.pila.setCurrentWidget(self.editor)
         self.vista.set_documento(doc)
         self.set_herramienta(Herramienta.SELECCIONAR)
-        self._añadir_reciente(ruta)
+        if doc.ruta:
+            self._añadir_reciente(doc.ruta)
         self._cargar_panel_lateral()
         self._comprobar_firmas()
         self._actualizar_estado_ui()
         QTimer.singleShot(50, self._zoom_inicial)
-        return True
 
     def _zoom_inicial(self) -> None:
         """Ajusta al ancho sin pasar del 140 % y empieza en la primera página."""
@@ -970,7 +987,8 @@ class VentanaPrincipal(QMainWindow):
     def guardar_como(self) -> bool:
         if self.documento is None:
             return False
-        sugerido = self.documento.ruta or str(Path.home() / self.documento.nombre)
+        carpeta = self.ajustes.value("ultima_carpeta", str(Path.home()))
+        sugerido = self.documento.ruta or os.path.join(carpeta, self.documento.nombre)
         ruta, _ = QFileDialog.getSaveFileName(self, "Guardar como", sugerido, FILTRO_PDF)
         if not ruta:
             return False
@@ -1104,6 +1122,10 @@ class VentanaPrincipal(QMainWindow):
         icono.addPixmap(pix, QIcon.Selected)
         self.miniaturas.item(i).setIcon(icono)
 
+    def _miniatura_elegida(self, fila: int) -> None:
+        if self.documento is not None and 0 <= fila < self.documento.num_paginas:
+            self.vista.ir_a_pagina(fila)
+
     def _ir_a_marcador(self, it: QTreeWidgetItem) -> None:
         pagina, y = it.data(0, Qt.UserRole)
         if pagina >= 0:
@@ -1195,21 +1217,18 @@ class VentanaPrincipal(QMainWindow):
         self._tras_cambio_estructura()
 
     def combinar(self) -> None:
+        """Une varios PDF en uno nuevo (empezando por el documento abierto, si lo hay)."""
+        dlg = DialogoCombinar(self, actual=self.documento)
+        if dlg.exec() != QDialog.Accepted or dlg.resultado is None:
+            return
+        nuevo = dlg.resultado
         if self.documento is None:
-            return
-        rutas, _ = QFileDialog.getOpenFileNames(self, "PDF que se añadirán al final", self.ajustes.value("ultima_carpeta", ""), FILTRO_PDF)
-        if not rutas:
-            return
-        self.documento.instantanea()
-        for ruta in rutas:
-            try:
-                otro = pymupdf.open(ruta)
-                self.documento.insertar_pdf(otro)
-                otro.close()
-            except Exception as exc:
-                QMessageBox.warning(self, "Combinar", f"No se pudo añadir {os.path.basename(ruta)}:\n{exc}")
-        self._tras_cambio_estructura()
-        self.aviso(f"Se han añadido {len(rutas)} documento(s) al final", 5)
+            self.mostrar_documento(nuevo)
+            ventana = self
+        else:
+            mostrar_en_ventana(nuevo)
+            ventana = next(v for v in _ventanas if v.documento is nuevo)
+        ventana.aviso(f"Documento combinado: {nuevo.num_paginas} páginas. Guárdalo con ⌘S", 6)
 
     def extraer_paginas(self, rango: str | None = None) -> None:
         if self.documento is None:
@@ -1792,20 +1811,3 @@ class VentanaPrincipal(QMainWindow):
         )
         caja.exec()
 
-
-def _parsear_rango(texto: str, total: int) -> list[int]:
-    paginas: list[int] = []
-    for parte in texto.replace(" ", "").split(","):
-        if not parte:
-            continue
-        if "-" in parte:
-            a, b = parte.split("-", 1)
-            a, b = int(a or 1), int(b or total)
-            if a > b:
-                a, b = b, a
-            paginas.extend(range(a, b + 1))
-        else:
-            paginas.append(int(parte))
-    if not paginas or any(p < 1 or p > total for p in paginas):
-        raise ValueError
-    return [p - 1 for p in paginas]
