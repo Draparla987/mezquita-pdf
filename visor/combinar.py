@@ -67,6 +67,30 @@ def imagen_a_pdf(ruta: str) -> pymupdf.Document:
     return doc
 
 
+def abrir_archivo(ruta: str, parent=None) -> tuple[pymupdf.Document, str] | None:
+    """Abre un PDF (pidiendo la contraseña si hace falta) o convierte una imagen en PDF.
+
+    Devuelve (documento, «pdf» | «imagen»), o None si se cancela la contraseña.
+    """
+    if ruta.lower().endswith(EXT_IMAGEN):
+        return imagen_a_pdf(ruta), "imagen"
+    doc = pymupdf.open(ruta)
+    if not doc.is_pdf:
+        doc.close()
+        raise ValueError("no es un PDF ni una imagen compatible")
+    if doc.needs_pass:
+        from .dialogos import DialogoContrasena
+        while True:
+            dlg = DialogoContrasena(os.path.basename(ruta), parent)
+            if dlg.exec() != QDialog.Accepted:
+                doc.close()
+                return None
+            if doc.authenticate(dlg.campo.text()):
+                break
+            QMessageBox.warning(parent, "Contraseña", "Contraseña incorrecta.")
+    return doc, "pdf"
+
+
 def _tramos(paginas: list[int]) -> list[tuple[int, int]]:
     """[0, 1, 2, 5, 4] → [(0, 2), (5, 5), (4, 4)]: bloques seguidos para insert_pdf."""
     tramos: list[list[int]] = []
@@ -412,25 +436,12 @@ class DialogoCombinar(QDialog):
             self.lista.addItem(it)
 
     def _abrir(self, ruta: str) -> Parte | None:
-        nombre = os.path.basename(ruta)
-        tam = os.path.getsize(ruta)
-        if ruta.lower().endswith(EXT_IMAGEN):
-            return Parte(nombre, imagen_a_pdf(ruta), ruta=ruta, tam=tam, origen="imagen")
-        doc = pymupdf.open(ruta)
-        if not doc.is_pdf:
-            doc.close()
-            raise ValueError("no es un PDF ni una imagen compatible")
-        if doc.needs_pass:
-            from .dialogos import DialogoContrasena
-            while True:
-                dlg = DialogoContrasena(nombre, self)
-                if dlg.exec() != QDialog.Accepted:
-                    doc.close()
-                    return None
-                if doc.authenticate(dlg.campo.text()):
-                    break
-                QMessageBox.warning(self, "Contraseña", "Contraseña incorrecta.")
-        return Parte(nombre, doc, ruta=ruta, tam=tam, firmado=doc.get_sigflags() > 0)
+        abierto = abrir_archivo(ruta, self)
+        if abierto is None:
+            return None
+        doc, origen = abierto
+        return Parte(os.path.basename(ruta), doc, ruta=ruta, tam=os.path.getsize(ruta), origen=origen,
+                     firmado=origen == "pdf" and doc.get_sigflags() > 0)
 
     def añadir_rutas(self, rutas: list[str], fila: int = -1) -> None:
         errores = []

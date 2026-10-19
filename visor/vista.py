@@ -209,9 +209,12 @@ class VistaPDF(QScrollArea):
         self.limpiar_busqueda()
         self.recargar(conservar_posicion=False)
 
-    def recargar(self, conservar_posicion: bool = True) -> None:
-        """Reconstruye las páginas tras un cambio en el documento."""
-        pagina = self.pagina_actual() if conservar_posicion else 0
+    def recargar(self, conservar_posicion: bool = True, pagina: int | None = None) -> None:
+        """Reconstruye las páginas tras un cambio en el documento (y va a `pagina`, si se indica)."""
+        if pagina is None:
+            pagina = self.pagina_actual() if conservar_posicion else 0
+        else:
+            conservar_posicion = True
         self._ultima_pagina = -1
         self._pixmaps.clear()
         self._palabras.clear()
@@ -689,8 +692,8 @@ class VistaPDF(QScrollArea):
                                lambda: self.pedir_editar_anotacion.emit(w.indice, xref))
             menu.addAction("Eliminar anotación", lambda: self.eliminar_anotacion(w.indice, xref))
             menu.addSeparator()
-        menu.addAction("Girar página a la derecha", lambda: self.window().girar_pagina(90, w.indice))
-        menu.addAction("Eliminar esta página", lambda: self.window().eliminar_pagina(w.indice))
+        menu.addAction("Girar página a la derecha", lambda: self.window().girar_pagina(90, [w.indice]))
+        menu.addAction("Eliminar esta página", lambda: self.window().eliminar_paginas([w.indice]))
         menu.exec(ev.globalPos())
 
     def eliminar_anotacion(self, indice: int, xref: int) -> None:

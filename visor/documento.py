@@ -75,6 +75,21 @@ class Documento:
         self.invalidar_paginas()
         self.doc.move_page(origen, destino)
 
+    def mover_paginas(self, paginas: list[int], destino: int) -> list[int]:
+        """Lleva `paginas` (en su orden) delante de la posición `destino` (0…n).
+
+        Conserva anotaciones, enlaces y marcadores. Devuelve los nuevos índices de esas páginas.
+        """
+        n = self.num_paginas
+        moviendo = sorted(set(paginas))
+        resto = [i for i in range(n) if i not in moviendo]
+        pos = destino - sum(1 for p in moviendo if p < destino)
+        orden = resto[:pos] + moviendo + resto[pos:]
+        if orden != list(range(n)):
+            self.invalidar_paginas()
+            self.doc.select(orden)
+        return list(range(pos, pos + len(moviendo)))
+
     def insertar_pdf(self, otro: pymupdf.Document, en: int = -1) -> None:
         self.invalidar_paginas()
         self.doc.insert_pdf(otro, start_at=en)

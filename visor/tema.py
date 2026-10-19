@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QAbstractButton, QApplication, QWidget
 
 NOMBRE_APP = "Mezquita PDF"
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 
 
 @dataclass(frozen=True)

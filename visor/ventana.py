@@ -11,15 +11,15 @@ from PySide6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QImage, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtPrintSupport import QPrintDialog, QPrinter
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox,
-    QFileDialog, QFormLayout, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea, QSlider, QSpinBox,
+    QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox,
+    QFileDialog, QFormLayout, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea, QSlider, QSpinBox,
     QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import compartir, sistema, tema
 from . import firma_digital as fd
-from .combinar import DialogoCombinar
+from .combinar import FILTRO as FILTRO_INSERTAR, DialogoCombinar, abrir_archivo
 from .componentes import (
     BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
     separador_vertical,
@@ -29,6 +29,7 @@ from .dialogos import (
     FUENTES_PDF,
 )
 from .documento import Documento, parsear_rango as _parsear_rango
+from .miniaturas import ListaMiniaturas, tam_miniatura
 from .vista import Herramienta, VistaPDF, a_rgb
 
 FILTRO_PDF = "Documentos PDF (*.pdf);;Todos los archivos (*)"
@@ -216,9 +217,11 @@ class VentanaPrincipal(QMainWindow):
 
         self.a_girar_der = A("Girar página a la derecha", lambda: self.girar_pagina(90), "Ctrl+R", "rotate-right")
         self.a_girar_izq = A("Girar página a la izquierda", lambda: self.girar_pagina(-90), "Ctrl+Shift+R", "rotate-left")
-        self.a_eliminar_pag = A("Eliminar página", self.eliminar_pagina, None, "delete-outline")
+        self.a_eliminar_pag = A("Eliminar página", lambda: self.eliminar_paginas(), None, "delete-outline",
+                                "Eliminar las páginas seleccionadas (o ⌫ en las miniaturas)")
         self.a_pag_blanco = A("Insertar página en blanco", self.insertar_blanco, None, "file-plus-outline")
-        self.a_pag_archivo = A("Insertar páginas desde archivo…", self.insertar_desde_archivo)
+        self.a_pag_archivo = A("Insertar páginas desde archivo…", self.insertar_desde_archivo, None, None,
+                               "Insertar PDF o imágenes después de la página actual (también puedes soltarlos en las miniaturas)")
         self.a_extraer = A("Extraer páginas…", self.extraer_paginas)
         self.a_subir_pag = A("Mover página arriba", lambda: self.mover_pagina(-1))
         self.a_bajar_pag = A("Mover página abajo", lambda: self.mover_pagina(1))
@@ -506,23 +509,16 @@ class VentanaPrincipal(QMainWindow):
             cs.addWidget(b)
         capa.addWidget(segmentos)
 
-        self.miniaturas = QListWidget()
-        self.miniaturas.setObjectName("miniaturas")
-        self.miniaturas.setViewMode(QListWidget.IconMode)
-        self.miniaturas.setFlow(QListWidget.TopToBottom)
-        self.miniaturas.setWrapping(False)
-        self.miniaturas.setIconSize(QSize(140, 180))
-        self.miniaturas.setSpacing(4)
-        self.miniaturas.setMovement(QListWidget.Snap)
-        self.miniaturas.setDragDropMode(QAbstractItemView.InternalMove)
-        self.miniaturas.setDefaultDropAction(Qt.MoveAction)
+        # Como en Vista Previa: ⌫ borra, arrastrar ordena, soltar PDF o imágenes los inserta
+        self.miniaturas = ListaMiniaturas()
         self.miniaturas.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.miniaturas.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.miniaturas.customContextMenuRequested.connect(self._menu_miniatura)
+        self.miniaturas.borrar_pedido.connect(lambda filas: self.eliminar_paginas(filas, confirmar=False))
+        self.miniaturas.paginas_movidas.connect(self.mover_paginas_a)
+        self.miniaturas.archivos_soltados.connect(self.insertar_archivos)
         # Con el ratón o con el teclado (flechas, AvPág/RePág): la vista sigue a la miniatura elegida
         self.miniaturas.currentRowChanged.connect(self._miniatura_elegida)
         self.miniaturas.itemClicked.connect(lambda it: self._miniatura_elegida(self.miniaturas.row(it)))
-        self.miniaturas.model().rowsMoved.connect(self._miniatura_movida)
         self.panel_pila.addWidget(self.miniaturas)
 
         pag_marc = QWidget()
@@ -764,10 +760,11 @@ class VentanaPrincipal(QMainWindow):
         self.spin_pagina.setValue(p + 1)
         self.spin_pagina.blockSignals(False)
         if 0 <= p < self.miniaturas.count():
-            self.miniaturas.blockSignals(True)
-            self.miniaturas.setCurrentRow(p)
-            self.miniaturas.scrollToItem(self.miniaturas.item(p))
-            self.miniaturas.blockSignals(False)
+            it = self.miniaturas.item(p)
+            if it.isSelected():  # forma parte de una selección de varias: se conserva
+                self.miniaturas.seleccionar(self.miniaturas.seleccionadas(), p)
+            else:
+                self.miniaturas.seleccionar([p], p)
 
     def _zoom_cambiado(self, z: float) -> None:
         self.combo_zoom.setEditText(f"{round(z * 100)} %")
@@ -1070,17 +1067,16 @@ class VentanaPrincipal(QMainWindow):
     # ------------------------------------------------------------------
     # Panel lateral
     # ------------------------------------------------------------------
-    def _cargar_panel_lateral(self) -> None:
-        self.miniaturas.blockSignals(True)
-        self.miniaturas.clear()
-        blanco = QPixmap(140, 180)
-        blanco.fill(Qt.white)
+    def _cargar_panel_lateral(self, seleccion: list[int] | None = None) -> None:
+        tamanos = []
         for i in range(self.documento.num_paginas):
-            it = QListWidgetItem(QIcon(blanco), str(i + 1))
-            it.setTextAlignment(Qt.AlignHCenter)
-            self.miniaturas.addItem(it)
-        self.miniaturas.blockSignals(False)
-        self._cola_miniaturas = list(range(self.documento.num_paginas))
+            r = self.documento.pagina(i).rect
+            tamanos.append(tam_miniatura(r.width, r.height))
+        self.miniaturas.cargar(tamanos)
+        actual = seleccion[0] if seleccion else self.vista.pagina_actual()
+        self.miniaturas.seleccionar(seleccion or [actual], actual)
+        # Primero las que se ven; luego el resto
+        self._cola_miniaturas = sorted(range(self.documento.num_paginas), key=lambda i: abs(i - actual))
         self._temporizador_mini.start(0)
 
         self.marcadores.clear()
@@ -1113,14 +1109,12 @@ class VentanaPrincipal(QMainWindow):
         if self.documento is None or not (0 <= i < self.miniaturas.count()):
             return
         pagina = self.documento.pagina(i)
-        escala = 360 / max(pagina.rect.width, pagina.rect.height)
+        r = pagina.rect
+        tam = tam_miniatura(r.width, r.height)
+        escala = tam.width() * max(2.0, self.devicePixelRatioF()) / r.width
         pm = pagina.get_pixmap(matrix=pymupdf.Matrix(escala, escala), alpha=False)
         img = QImage(pm.samples, pm.width, pm.height, pm.stride, QImage.Format_RGB888).copy()
-        pix = QPixmap.fromImage(img)
-        icono = QIcon()
-        icono.addPixmap(pix, QIcon.Normal)
-        icono.addPixmap(pix, QIcon.Selected)
-        self.miniaturas.item(i).setIcon(icono)
+        self.miniaturas.poner_miniatura(i, QPixmap.fromImage(img), tam)
 
     def _miniatura_elegida(self, fila: int) -> None:
         if self.documento is not None and 0 <= fila < self.documento.num_paginas:
@@ -1131,63 +1125,119 @@ class VentanaPrincipal(QMainWindow):
         if pagina >= 0:
             self.vista.ir_a_pagina(pagina, y)
 
-    def _miniatura_movida(self, _padre, inicio, _fin, _destino, fila) -> None:
-        if self.documento is None:
-            return
-        destino = fila if fila > inicio else fila
-        self.documento.instantanea()
-        self.documento.mover_pagina(inicio, -1 if destino >= self.documento.num_paginas else destino)
-        QTimer.singleShot(0, self._tras_cambio_estructura)
-
     def _menu_miniatura(self, pos) -> None:
         it = self.miniaturas.itemAt(pos)
         if it is None:
             return
-        i = self.miniaturas.row(it)
+        if not it.isSelected():
+            self.miniaturas.seleccionar([self.miniaturas.row(it)], self.miniaturas.row(it))
+        filas = self.miniaturas.seleccionadas()
+        n = len(filas)
+        rango = ", ".join(str(f + 1) for f in filas)
         menu = QMenu(self)
-        menu.addAction("Girar a la derecha", lambda: self.girar_pagina(90, i))
-        menu.addAction("Girar a la izquierda", lambda: self.girar_pagina(-90, i))
-        menu.addAction("Insertar página en blanco después", lambda: self.insertar_blanco(i))
-        menu.addAction("Extraer esta página…", lambda: self.extraer_paginas(str(i + 1)))
+        menu.addAction("Girar a la derecha", lambda: self.girar_pagina(90, filas))
+        menu.addAction("Girar a la izquierda", lambda: self.girar_pagina(-90, filas))
+        menu.addAction("Insertar página en blanco después", lambda: self.insertar_blanco(filas[-1]))
+        menu.addAction("Insertar archivos después…", lambda: self.insertar_desde_archivo(filas[-1] + 1))
+        menu.addAction("Extraer esta página…" if n == 1 else f"Extraer estas {n} páginas…",
+                       lambda: self.extraer_paginas(rango))
         menu.addSeparator()
-        menu.addAction("Eliminar página", lambda: self.eliminar_pagina(i))
+        borrar = menu.addAction("Eliminar página" if n == 1 else f"Eliminar {n} páginas",
+                                lambda: self.eliminar_paginas(filas, confirmar=False))
+        borrar.setShortcut(QKeySequence(Qt.Key_Backspace))  # solo informativo: lo atiende la lista
         menu.exec(self.miniaturas.mapToGlobal(pos))
+
+    def _paginas_objetivo(self) -> list[int]:
+        """Páginas seleccionadas en las miniaturas o, si no hay varias, la página actual."""
+        filas = self.miniaturas.seleccionadas()
+        return filas if len(filas) > 1 else [self.vista.pagina_actual()]
 
     def _alternar_panel(self) -> None:
         self.panel.setVisible(not self.panel.isVisible())
         self.ajustes.setValue("ventana/panel", self.panel.isVisible())
 
-    def _tras_cambio_estructura(self) -> None:
-        self.vista.recargar()
-        self._cargar_panel_lateral()
+    def _tras_cambio_estructura(self, ir_a: int | None = None, seleccion: list[int] | None = None) -> None:
+        self.vista.recargar(pagina=ir_a)
+        self._cargar_panel_lateral(seleccion if seleccion else ([ir_a] if ir_a is not None else None))
         self._actualizar_estado_ui()
 
     # ------------------------------------------------------------------
     # Operaciones con páginas
     # ------------------------------------------------------------------
-    def girar_pagina(self, grados: int, indice: int | None = None) -> None:
+    def girar_pagina(self, grados: int, indices: list[int] | None = None) -> None:
         if self.documento is None:
             return
-        i = self.vista.pagina_actual() if indice is None else indice
-        pagina = self.documento.pagina(i)
+        indices = self._paginas_objetivo() if indices is None else indices
         self.documento.instantanea()
-        pagina.set_rotation((pagina.rotation + grados) % 360)
+        for i in indices:
+            pagina = self.documento.pagina(i)
+            pagina.set_rotation((pagina.rotation + grados) % 360)
         self.vista.recargar()
-        self._actualizar_miniatura(i)
+        for i in indices:
+            self._actualizar_miniatura(i)
+        self.miniaturas.viewport().update()
         self._actualizar_estado_ui()
 
-    def eliminar_pagina(self, indice: int | None = None) -> None:
+    def eliminar_paginas(self, indices: list[int] | None = None, confirmar: bool = True) -> None:
+        """Borra páginas. Desde las miniaturas (⌫) no pregunta, como Vista Previa: se puede deshacer."""
         if self.documento is None:
             return
-        if self.documento.num_paginas <= 1:
-            QMessageBox.information(self, "Eliminar página", "Un PDF debe tener al menos una página.")
+        indices = sorted(set(self._paginas_objetivo() if indices is None else indices))
+        n = len(indices)
+        if n >= self.documento.num_paginas:
+            QMessageBox.information(self, "Eliminar páginas", "Un PDF debe tener al menos una página.")
             return
-        i = self.vista.pagina_actual() if indice is None else indice
-        if QMessageBox.question(self, "Eliminar página", f"¿Eliminar la página {i + 1}?") != QMessageBox.Yes:
+        lista = ", ".join(str(i + 1) for i in indices)
+        if confirmar and QMessageBox.question(
+                self, "Eliminar páginas",
+                f"¿Eliminar la página {lista}?" if n == 1 else f"¿Eliminar las páginas {lista}?") != QMessageBox.Yes:
             return
         self.documento.instantanea()
-        self.documento.eliminar_pagina(i)
-        self._tras_cambio_estructura()
+        self.documento.invalidar_paginas()
+        self.documento.doc.delete_pages(indices)
+        siguiente = min(indices[0], self.documento.num_paginas - 1)
+        self._tras_cambio_estructura(ir_a=siguiente)
+        self.aviso((f"Página {lista} eliminada" if n == 1 else f"{n} páginas eliminadas") + " · ⌘Z para deshacer", 4)
+
+    def mover_paginas_a(self, indices: list[int], destino: int) -> None:
+        """Reordena: lleva las páginas arrastradas en las miniaturas a `destino` (0…n)."""
+        if self.documento is None:
+            return
+        self.documento.instantanea()
+        nuevas = self.documento.mover_paginas(indices, destino)
+        self._tras_cambio_estructura(ir_a=nuevas[0], seleccion=nuevas)
+
+    def insertar_archivos(self, rutas: list[str], posicion: int) -> None:
+        """Inserta PDF o imágenes (p. ej. soltados en las miniaturas) delante de `posicion`."""
+        if self.documento is None:
+            return
+        insertadas, nombres, errores = 0, [], []
+        for ruta in rutas:
+            try:
+                abierto = abrir_archivo(ruta, self)
+            except Exception as exc:
+                errores.append(f"• {os.path.basename(ruta)}: {exc}")
+                continue
+            if abierto is None:  # contraseña cancelada
+                continue
+            otro, _ = abierto
+            if insertadas == 0:
+                self.documento.instantanea()
+            en = posicion + insertadas
+            self.documento.insertar_pdf(otro, -1 if en >= self.documento.num_paginas else en)
+            insertadas += otro.page_count
+            nombres.append(os.path.basename(ruta))
+            otro.close()
+            self.ajustes.setValue("ultima_carpeta", os.path.dirname(ruta))
+        if errores:
+            QMessageBox.warning(self, "Insertar documentos",
+                                "No se han podido añadir estos archivos:\n\n" + "\n".join(errores))
+        if not insertadas:
+            return
+        self._tras_cambio_estructura(ir_a=posicion, seleccion=list(range(posicion, posicion + insertadas)))
+        origen = f"«{nombres[0]}»" if len(nombres) == 1 else f"{len(nombres)} archivos"
+        self.aviso(f"{insertadas} página{'s' if insertadas != 1 else ''} de {origen} añadida"
+                   f"{'s' if insertadas != 1 else ''} · ⌘Z para deshacer", 5)
 
     def insertar_blanco(self, despues_de: int | None = None) -> None:
         if self.documento is None:
@@ -1196,25 +1246,15 @@ class VentanaPrincipal(QMainWindow):
         r = self.documento.pagina(i).rect
         self.documento.instantanea()
         self.documento.nueva_pagina(i + 1, r.width, r.height)
-        self._tras_cambio_estructura()
-        self.vista.ir_a_pagina(i + 1)
+        self._tras_cambio_estructura(ir_a=i + 1)
 
-    def insertar_desde_archivo(self) -> None:
+    def insertar_desde_archivo(self, posicion: int | None = None) -> None:
         if self.documento is None:
             return
-        ruta, _ = QFileDialog.getOpenFileName(self, "Insertar páginas de…", self.ajustes.value("ultima_carpeta", ""), FILTRO_PDF)
-        if not ruta:
-            return
-        i = self.vista.pagina_actual()
-        try:
-            otro = pymupdf.open(ruta)
-            self.documento.instantanea()
-            self.documento.insertar_pdf(otro, i + 1)
-            otro.close()
-        except Exception as exc:
-            QMessageBox.critical(self, "Error", str(exc))
-            return
-        self._tras_cambio_estructura()
+        rutas, _ = QFileDialog.getOpenFileNames(self, "Insertar páginas de…", self.ajustes.value("ultima_carpeta", ""),
+                                                FILTRO_INSERTAR)
+        if rutas:
+            self.insertar_archivos(rutas, self.vista.pagina_actual() + 1 if posicion is None else posicion)
 
     def combinar(self) -> None:
         """Une varios PDF en uno nuevo (empezando por el documento abierto, si lo hay)."""
@@ -1269,8 +1309,7 @@ class VentanaPrincipal(QMainWindow):
             self.documento.mover_pagina(i, j + 1 if j + 1 < self.documento.num_paginas else -1)
         else:
             self.documento.mover_pagina(i, j)
-        self._tras_cambio_estructura()
-        self.vista.ir_a_pagina(j)
+        self._tras_cambio_estructura(ir_a=j)
 
     # ------------------------------------------------------------------
     # Deshacer / rehacer

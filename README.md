@@ -33,7 +33,7 @@ Desde el código sin compilar: `./MezquitaPDF.command`.
 | Ver | Editar | Firmar |
 |---|---|---|
 | Desplazamiento continuo, zoom (⌘+ / ⌘−, pellizco en el trackpad), ajustar al ancho o a la página | Resaltar, subrayar y tachar texto | Firma manuscrita: dibujada, escrita con letra caligráfica o desde una foto (se quita el fondo) |
-| Miniaturas (arrástralas para reordenar; ↑ ↓ para cambiar de página) y marcadores | Añadir texto, notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
+| Miniaturas como en Vista Previa: ↑ ↓ para cambiar de página, ⌫ para borrar, arrastrar para reordenar (también varias con ⌘/⇧) y soltar PDF o imágenes para insertarlos; marcadores | Añadir texto, notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
 | Búsqueda (⌘F, Intro = siguiente) | **Editar texto existente** (clic en una línea) | Sello de tiempo de una TSA (opcional) |
 | Seleccionar y copiar texto | **Borrar zona** (elimina de verdad el contenido) | Verificación de firmas, con un aviso verde/rojo al abrir el documento |
 | Rellenar formularios y seguir enlaces | Insertar imágenes, borrar anotaciones (doble clic sobre un texto añadido para editarlo) | Certificar el documento (bloquea cambios) |
@@ -147,6 +147,7 @@ visor/compartir.py      Correo, WhatsApp y servicios de compartir de macOS
 visor/tema.py           Paleta, estilos, iconos y logotipo (arco de la Mezquita)
 visor/componentes.py    Bienvenida, avisos, barras flotantes, diálogo de WhatsApp
 visor/combinar.py       Combinar documentos (diálogo y lógica)
+visor/miniaturas.py     Panel de miniaturas (selección, arrastrar y soltar, ⌫)
 MezquitaPDF.spec        Configuración para crear la .app (PyInstaller)
 pruebas/                Prueba de extremo a extremo (también se ejecuta en GitHub)
 .github/workflows/      Compilación automática de los .dmg

@@ -55,5 +55,25 @@ assert v.abrir_ruta(str(TMP / "anotado.pdf"))
 v.documento.modificado = False
 v.close()
 
+# 5. Miniaturas: reordenar, insertar archivos soltados y borrar con ⌫ (todo se puede deshacer)
+varias = pymupdf.open()
+for i in range(5):
+    varias.new_page().insert_text((72, 72), f"P{i + 1}")
+varias.save(TMP / "varias.pdf")
+v = VentanaPrincipal()
+assert v.abrir_ruta(str(TMP / "varias.pdf"))
+textos = lambda: [v.documento.pagina(i).get_text().strip() for i in range(v.documento.num_paginas)]  # noqa: E731
+v.mover_paginas_a([3, 4], 0)
+assert textos() == ["P4", "P5", "P1", "P2", "P3"], textos()
+v.insertar_archivos([str(origen)], 2)
+assert v.documento.num_paginas == 5 + pymupdf.open(origen).page_count
+v.eliminar_paginas([0, 1], confirmar=False)
+assert textos()[0] not in ("P4", "P5")
+while v.documento.puede_deshacer():
+    v.deshacer()
+assert textos() == ["P1", "P2", "P3", "P4", "P5"], textos()
+v.documento.modificado = False
+v.close()
+
 shutil.rmtree(TMP, ignore_errors=True)
 print("✅ Prueba básica superada")
