@@ -89,6 +89,14 @@ PISTAS = {
 }
 
 _ventanas: list["VentanaPrincipal"] = []
+_ultima_activa: "VentanaPrincipal | None" = None
+
+
+def ventana_activa() -> "VentanaPrincipal | None":
+    """La última ventana que usó el usuario y que tiene un documento (para Claude)."""
+    if _ultima_activa in _ventanas and _ultima_activa.documento is not None:
+        return _ultima_activa
+    return next((v for v in reversed(_ventanas) if v.documento is not None), None)
 
 
 def nueva_ventana(ruta: str | None = None) -> "VentanaPrincipal":
@@ -100,12 +108,24 @@ def nueva_ventana(ruta: str | None = None) -> "VentanaPrincipal":
     return v
 
 
-def mostrar_en_ventana(doc: Documento) -> None:
-    """Muestra un documento nuevo (aún sin guardar) en una ventana vacía o en una nueva."""
+def mostrar_en_ventana(doc: Documento, activar: bool = True) -> "VentanaPrincipal":
+    """Muestra un documento nuevo (aún sin guardar) en una ventana vacía o en una nueva.
+
+    Con `activar=False` (lo que pide Claude) no se le quita el foco a la app que se esté usando.
+    """
     v = next((v for v in _ventanas if v.documento is None), None) or nueva_ventana()
     v.mostrar_documento(doc)
     v.raise_()
-    v.activateWindow()
+    if activar:
+        v.activateWindow()
+    else:
+        marcar_activa(v)
+    return v
+
+
+def marcar_activa(v: "VentanaPrincipal") -> None:
+    global _ultima_activa
+    _ultima_activa = v
 
 
 def abrir_en_ventana(ruta: str) -> None:
@@ -300,6 +320,9 @@ class VentanaPrincipal(QMainWindow):
                     m.addAction(self.accion_de_herr[f])
             else:
                 m.addAction(self.accion_de_herr[h])
+        m.addSeparator()
+        a_claude = m.addAction("Conectar con Claude…", self.conectar_claude)
+        tema.poner_icono(a_claude, "creation")
 
         self.menu_firmar = mb.addMenu("&Firmar")
         for a in (self.a_mis_firmas, self.a_gestionar_firmas, None, self.a_firma_digital,
@@ -1019,6 +1042,16 @@ class VentanaPrincipal(QMainWindow):
         if r == QMessageBox.Save:
             return self.guardar()
         return r == QMessageBox.Discard
+
+    def changeEvent(self, ev) -> None:
+        global _ultima_activa
+        if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
+            _ultima_activa = self
+        super().changeEvent(ev)
+
+    def conectar_claude(self) -> None:
+        from . import puente_claude
+        puente_claude.mostrar_dialogo(self)
 
     def closeEvent(self, ev) -> None:
         if not self._confirmar_descartar():

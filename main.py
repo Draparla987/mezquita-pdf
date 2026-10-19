@@ -2,6 +2,11 @@
 
 import sys
 
+if __name__ == "__main__" and "--mcp" in sys.argv:
+    # Extensión para la app de Claude: sin ventanas ni Qt (ver visor/mcp_servidor.py)
+    from visor.mcp_servidor import main as servidor_mcp
+    sys.exit(servidor_mcp())
+
 from PySide6.QtCore import QEvent, QSettings, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QApplication
@@ -58,6 +63,8 @@ def main() -> int:
     app.setWindowIcon(QIcon(QPixmap.fromImage(tema.imagen_icono_app(512))))
     migrar_ajustes()
     tema.aplicar_tema(app)
+    from visor import puente_claude
+    puente_claude.iniciar(app)  # para que Claude pueda trabajar con los documentos abiertos
 
     def cambio_de_tema(*_):
         tema.aplicar_tema(app)

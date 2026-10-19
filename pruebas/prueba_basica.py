@@ -72,6 +72,22 @@ assert textos()[0] not in ("P4", "P5")
 while v.documento.puede_deshacer():
     v.deshacer()
 assert textos() == ["P1", "P2", "P3", "P4", "P5"], textos()
+
+# 6. Extensión para Claude: protocolo MCP y herramientas (sin socket ni app de Claude)
+import json  # noqa: E402
+from visor import mcp_servidor, puente_claude, ventana  # noqa: E402
+ini = mcp_servidor._atender({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                             "params": {"protocolVersion": "2025-06-18"}})["result"]
+assert ini["protocolVersion"] == "2025-06-18" and ini["serverInfo"]["name"] == "mezquita-pdf"
+nombres = {h["name"] for h in mcp_servidor._atender({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]}
+assert nombres == set(puente_claude.HERRAMIENTAS)
+ventana._ventanas.append(v)
+pedir = lambda h, **a: puente_claude.atender(json.dumps({"herramienta": h, "argumentos": a}).encode())  # noqa: E731
+assert "P3" in pedir("leer_texto", paginas="3")["texto"]
+assert pedir("resaltar", textos=["P2"])["texto"].startswith("1 marcas")
+assert "error" in pedir("ver_pagina", pagina=99)
+assert pedir("ver_pagina", pagina=1)["imagen"]["tipo"] == "image/jpeg"
+ventana._ventanas.remove(v)
 v.documento.modificado = False
 v.close()
 

@@ -87,6 +87,20 @@ AC RAIZ FNMT-RCM, ACCV, Izenpe y Firmaprofesional.
 > hay cambios posteriores). Deshacer, eliminar páginas o reordenarlas sí invalidaría la
 > firma, así que en ese caso el programa te pedirá guardar una copia aparte.
 
+## Usar con Claude
+
+*Herramientas → Conectar con Claude…* añade Mezquita PDF como extensión (MCP) de la app de
+Claude para Mac, con tu propia cuenta de Claude: no hace falta clave de API. Después de
+conectarla, cierra Claude (⌘Q) y vuelve a abrirlo. Luego puedes pedirle, por ejemplo,
+«resume el PDF que tengo abierto en Mezquita», «resalta las fechas», «rellena este formulario
+con…» o «une estos PDF de Descargas».
+
+- Claude trabaja sobre los documentos abiertos: los cambios se ven al momento, las anotaciones
+  quedan firmadas como «Claude» y todo se deshace con ⌘Z. Nunca guarda en disco.
+- Solo se envía a Claude lo que le pidas, y su app pide permiso antes de cada acción.
+- El enlace entre las dos apps es un socket local accesible solo para tu usuario. Se puede
+  desactivar en la misma ventana.
+
 ## Limitaciones conocidas
 
 - **Editar texto** sustituye la línea con una fuente estándar (Helvetica, Times o Courier),
@@ -148,6 +162,8 @@ visor/tema.py           Paleta, estilos, iconos y logotipo (arco de la Mezquita)
 visor/componentes.py    Bienvenida, avisos, barras flotantes, diálogo de WhatsApp
 visor/combinar.py       Combinar documentos (diálogo y lógica)
 visor/miniaturas.py     Panel de miniaturas (selección, arrastrar y soltar, ⌫)
+visor/mcp_servidor.py   Extensión para la app de Claude (MCP por stdio, sin Qt) e instalación
+visor/puente_claude.py  Lo que Claude puede hacer en la app (socket local privado) y su ventana
 MezquitaPDF.spec        Configuración para crear la .app (PyInstaller)
 pruebas/                Prueba de extremo a extremo (también se ejecuta en GitHub)
 .github/workflows/      Compilación automática de los .dmg
