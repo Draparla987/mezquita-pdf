@@ -28,10 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
+      # Solo paquetes oficiales ya compilados y sin caché: un «cryptography» compilado en la
+      # máquina enlaza con su OpenSSL y la app empaquetada no arranca en otros Mac.
       - name: Instalar dependencias
-        run: pip install -r requirements.txt pyinstaller
+        run: pip install --no-cache-dir --only-binary=:all: -r requirements.txt pyinstaller
 
       - name: Pruebas
         env:
@@ -40,6 +41,13 @@ jobs:
 
       - name: Crear la aplicación
         run: pyinstaller --noconfirm --clean MezquitaPDF.spec
+
+      # Si la app empaquetada no arranca, la compilación falla y no se publica nada
+      - name: Comprobar que la app arranca
+        shell: bash  # con «pipefail»: si la app falla, falla el paso
+        run: |
+          "dist/Mezquita PDF.app/Contents/MacOS/Mezquita PDF" --diagnostico | tee diagnostico.txt
+          grep -q "Mezquita PDF $(python -c 'import sys; sys.path.insert(0, "visor"); import version; print(version.VERSION)')" diagnostico.txt
 
       - name: Firma ad hoc y DMG
         run: |

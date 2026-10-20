@@ -1,5 +1,5 @@
 PySide6>=6.8
-PyMuPDF>=1.25
+PyMuPDF>=1.25,<2  # la 2.0 añade «layout» (modelos ONNX) y la app empaquetada no arranca
 pyHanko>=0.25
 pyhanko-certvalidator>=0.26
 pillow>=10
