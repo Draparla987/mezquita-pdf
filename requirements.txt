@@ -7,3 +7,4 @@ aiohttp>=3.9
 qtawesome>=1.3
 pyobjc-framework-Cocoa>=10; sys_platform == "darwin"
 pyobjc-framework-Security>=10; sys_platform == "darwin"
+certifi  # certificados para las conexiones HTTPS (actualizaciones)

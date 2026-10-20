@@ -87,6 +87,25 @@ AC RAIZ FNMT-RCM, ACCV, Izenpe y Firmaprofesional.
 > hay cambios posteriores). Deshacer, eliminar páginas o reordenarlas sí invalidaría la
 > firma, así que en ese caso el programa te pedirá guardar una copia aparte.
 
+## Actualizaciones
+
+Mezquita PDF comprueba como mucho una vez al día si hay una versión nueva publicada en GitHub.
+Solo consulta el número de la última versión: no envía datos tuyos ni de tus documentos. Si la
+hay, te la ofrece con sus novedades y, al pulsar **Actualizar**, hace lo siguiente:
+
+1. Descarga el instalador de tu Mac (Apple Silicon o Intel).
+2. Comprueba su tamaño, su huella SHA-256, que contiene Mezquita PDF en la versión anunciada y
+   que su firma es válida.
+3. Sustituye la app cuando la cierras y abre la nueva.
+
+Si la app no se puede sustituir en su sitio, se abre el instalador para arrastrarla a
+Aplicaciones. En *Ayuda* están «Buscar actualizaciones…» y la opción para desactivar la
+comprobación automática.
+
+Para publicar una versión, crea su etiqueta `vX.Y.Z`. GitHub compila los dos instaladores y los
+adjunta a la publicación; desde ese momento les llega a todos. Los cambios subidos a `main` sin
+publicar no llegan a nadie.
+
 ## Usar con Claude
 
 *Herramientas → Conectar con Claude…* añade Mezquita PDF como extensión (MCP) de la app de
@@ -164,6 +183,7 @@ visor/combinar.py       Combinar documentos (diálogo y lógica)
 visor/miniaturas.py     Panel de miniaturas (selección, arrastrar y soltar, ⌫)
 visor/mcp_servidor.py   Extensión para la app de Claude (MCP por stdio, sin Qt) e instalación
 visor/puente_claude.py  Lo que Claude puede hacer en la app (socket local privado) y su ventana
+visor/actualizaciones.py  Avisos de versión nueva e instalación (GitHub Releases)
 MezquitaPDF.spec        Configuración para crear la .app (PyInstaller)
 pruebas/                Prueba de extremo a extremo (también se ejecuta en GitHub)
 .github/workflows/      Compilación automática de los .dmg

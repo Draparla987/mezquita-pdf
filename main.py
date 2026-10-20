@@ -48,6 +48,13 @@ def diagnostico() -> int:
     from visor import sistema
     print(f"Los PDF se abren ahora con: {sistema.app_predeterminada_pdf() or 'desconocido'}"
           f" · Mezquita PDF es la predeterminada: {sistema.es_predeterminada()}")
+    from visor import actualizaciones
+    try:
+        v = actualizaciones.consultar()
+        print(f"Última versión publicada: {v.numero} ({'hay una más nueva' if actualizaciones.es_mas_nueva(v.numero) else 'al día'})"
+              f" · instalador para este Mac: {'sí' if v.url else 'no'}")
+    except Exception as exc:
+        print(f"No se ha podido consultar la última versión: {exc}")
     return 0
 
 
@@ -65,6 +72,8 @@ def main() -> int:
     tema.aplicar_tema(app)
     from visor import puente_claude
     puente_claude.iniciar(app)  # para que Claude pueda trabajar con los documentos abiertos
+    from visor import actualizaciones
+    actualizaciones.iniciar(app)  # avisa si hay una versión nueva publicada (una vez al día)
 
     def cambio_de_tema(*_):
         tema.aplicar_tema(app)

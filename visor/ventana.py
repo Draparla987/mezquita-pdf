@@ -334,6 +334,15 @@ class VentanaPrincipal(QMainWindow):
                                             self.hacer_predeterminada)
         self.a_predeterminada.setEnabled(sistema.ruta_app() is not None)
         m.addSeparator()
+        a = m.addAction("Buscar actualizaciones…", self.buscar_actualizaciones)
+        tema.poner_icono(a, "update")
+        self.a_auto_actualizar = m.addAction("Buscar actualizaciones automáticamente")
+        self.a_auto_actualizar.setCheckable(True)
+        self.a_auto_actualizar.setChecked(self.ajustes.value("actualizaciones/automatico", True, type=bool))
+        self.a_auto_actualizar.toggled.connect(lambda si: self.ajustes.setValue("actualizaciones/automatico", si))
+        m.aboutToShow.connect(lambda: self.a_auto_actualizar.setChecked(
+            self.ajustes.value("actualizaciones/automatico", True, type=bool)))
+        m.addSeparator()
         self.a_acerca = m.addAction(f"Acerca de {tema.NOMBRE_APP}", self._acerca_de)
 
     # ------------------------------------------------------------------
@@ -1048,6 +1057,10 @@ class VentanaPrincipal(QMainWindow):
         if ev.type() == QEvent.ActivationChange and self.isActiveWindow():
             _ultima_activa = self
         super().changeEvent(ev)
+
+    def buscar_actualizaciones(self) -> None:
+        from . import actualizaciones
+        actualizaciones.buscar_ahora()
 
     def conectar_claude(self) -> None:
         from . import puente_claude
