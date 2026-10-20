@@ -32,7 +32,8 @@ jobs:
       # Solo paquetes oficiales ya compilados y sin caché: un «cryptography» compilado en la
       # máquina enlaza con su OpenSSL y la app empaquetada no arranca en otros Mac.
       - name: Instalar dependencias
-        run: pip install --no-cache-dir --only-binary=:all: -r requirements.txt pyinstaller
+        run: |
+          pip install --no-cache-dir --only-binary=:all: -r requirements.txt pyinstaller
 
       - name: Pruebas
         env:
