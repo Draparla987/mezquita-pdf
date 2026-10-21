@@ -1,7 +1,8 @@
 """Compartir el PDF: correo electrónico, WhatsApp y servicios de macOS (AirDrop, Mensajes…).
 
-En macOS se usan los servicios nativos (NSSharingService) mediante PyObjC; en otros
-sistemas se recurre a mailto: y a abrir la carpeta del archivo.
+En macOS se usan los servicios nativos (NSSharingService) mediante PyObjC. En Windows, el
+correo se crea con Simple MAPI (Outlook, Thunderbird…) con el PDF ya adjunto. Si no hay nada
+de eso, se recurre a mailto: y a abrir la carpeta del archivo.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import QApplication
 
 ES_MAC = sys.platform == "darwin"
+ES_WINDOWS = sys.platform == "win32"
 ID_WHATSAPP = "net.whatsapp.WhatsApp"
 
 try:
@@ -99,10 +101,58 @@ def enviar_por_correo(ruta: str, asunto: str, cuerpo: str) -> str:
         end tell'''
         if _applescript(guion):
             return "Mail"
-    # Último recurso: mensaje vacío con mailto y la carpeta abierta para adjuntar a mano
+    if ES_WINDOWS:
+        _correo_windows(ruta, asunto, cuerpo)
+        return "correo"
+    _correo_mailto(ruta, asunto, cuerpo)
+    return "mailto"
+
+
+def _correo_mailto(ruta: str, asunto: str, cuerpo: str) -> None:
+    """Último recurso: mensaje vacío con mailto y la carpeta abierta para adjuntar a mano."""
     webbrowser.open(f"mailto:?subject={quote(asunto)}&body={quote(cuerpo)}")
     mostrar_en_carpeta(ruta)
-    return "mailto"
+
+
+def _correo_windows(ruta: str, asunto: str, cuerpo: str) -> None:
+    """Mensaje nuevo con el PDF adjunto en el programa de correo de Windows (Simple MAPI).
+
+    MAPISendMail no vuelve hasta que se cierra la ventana del mensaje, así que va en otro hilo
+    (sin tocar Qt). Si no hay un programa compatible, se recurre a mailto.
+    """
+    import ctypes
+    import threading
+
+    class Adjunto(ctypes.Structure):
+        _fields_ = [("ulReserved", ctypes.c_ulong), ("flFlags", ctypes.c_ulong), ("nPosition", ctypes.c_ulong),
+                    ("lpszPathName", ctypes.c_wchar_p), ("lpszFileName", ctypes.c_wchar_p),
+                    ("lpFileType", ctypes.c_void_p)]
+
+    class Mensaje(ctypes.Structure):
+        _fields_ = [("ulReserved", ctypes.c_ulong), ("lpszSubject", ctypes.c_wchar_p),
+                    ("lpszNoteText", ctypes.c_wchar_p), ("lpszMessageType", ctypes.c_wchar_p),
+                    ("lpszDateReceived", ctypes.c_wchar_p), ("lpszConversationID", ctypes.c_wchar_p),
+                    ("flFlags", ctypes.c_ulong), ("lpOriginator", ctypes.c_void_p), ("nRecipCount", ctypes.c_ulong),
+                    ("lpRecips", ctypes.c_void_p), ("nFileCount", ctypes.c_ulong),
+                    ("lpFiles", ctypes.POINTER(Adjunto))]
+
+    MAPI_LOGON_UI, MAPI_DIALOG, MAPI_USER_ABORT = 0x1, 0x8, 1
+
+    def trabajo():
+        try:
+            mapi = ctypes.WinDLL("mapi32")
+            enviar = mapi.MAPISendMailW
+            enviar.argtypes = [ctypes.c_size_t, ctypes.c_size_t, ctypes.POINTER(Mensaje), ctypes.c_ulong, ctypes.c_ulong]
+            enviar.restype = ctypes.c_ulong
+            adjunto = Adjunto(0, 0, 0xFFFFFFFF, ruta, Path(ruta).name, None)
+            mensaje = Mensaje(0, asunto, cuerpo, None, None, None, 0, None, 0, None, 1, ctypes.pointer(adjunto))
+            resultado = enviar(0, 0, ctypes.byref(mensaje), MAPI_LOGON_UI | MAPI_DIALOG, 0)
+        except Exception:
+            resultado = -1
+        if resultado not in (0, MAPI_USER_ABORT):
+            _correo_mailto(ruta, asunto, cuerpo)
+
+    threading.Thread(target=trabajo, daemon=True).start()
 
 
 # ----------------------------------------------------------------------------
@@ -111,8 +161,13 @@ def enviar_por_correo(ruta: str, asunto: str, cuerpo: str) -> str:
 def whatsapp_instalado() -> bool:
     if HAY_APPKIT:
         return NSWorkspace.sharedWorkspace().URLForApplicationWithBundleIdentifier_(ID_WHATSAPP) is not None
-    if sys.platform == "win32":
-        return False  # en Windows se usa WhatsApp Web / app de la tienda
+    if ES_WINDOWS:  # WhatsApp para Windows (de la Microsoft Store) registra el enlace «whatsapp:»
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "whatsapp"):
+                return True
+        except OSError:
+            return False
     return False
 
 
@@ -145,7 +200,7 @@ def abrir_whatsapp(telefono: str = "") -> str:
 # Portapapeles, Finder y servicios de macOS
 # ----------------------------------------------------------------------------
 def copiar_archivo(ruta: str) -> None:
-    """Copia el archivo (no su contenido) para pegarlo con ⌘V en WhatsApp, Mail, Finder…"""
+    """Copia el archivo (no su contenido) para pegarlo (⌘V / Ctrl+V) en WhatsApp, el correo, una carpeta…"""
     if HAY_APPKIT:
         pb = NSPasteboard.generalPasteboard()
         pb.clearContents()

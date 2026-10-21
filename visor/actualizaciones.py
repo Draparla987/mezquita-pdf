@@ -3,14 +3,16 @@
 - Comprueba como mucho una vez al día (o al pedirlo en Ayuda). Solo consulta la última
   versión publicada: no se envía ningún dato del usuario ni de sus documentos.
 - Nada se instala sin que el usuario pulse «Actualizar». Se descarga el instalador de su
-  Mac, se comprueba (tamaño, huella SHA-256, identificador y firma de la app) y la app se
-  sustituye cuando Mezquita PDF se cierra; después se abre la versión nueva.
-- Si no se puede sustituir en su sitio (sin permiso de escritura, o la app se ejecuta desde
-  el propio .dmg), se abre el instalador para arrastrarla a Aplicaciones.
+  equipo y se comprueba (tamaño y huella SHA-256; en el Mac, además, identificador, versión y
+  firma de la app). Al cerrarse Mezquita PDF se instala y se abre la versión nueva: en el Mac se
+  sustituye la app; en Windows se ejecuta el instalador en silencio (sin pedir permisos).
+- Si no se puede instalar en su sitio (sin permiso de escritura, la app se ejecuta desde el
+  .dmg o no se instaló con el instalador), se abre el instalador para hacerlo a mano.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -33,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import tema
+from .plataforma import ES_WINDOWS, carpeta_cache
 from .version import VERSION
 
 REPO = "Draparla987/mezquita-pdf"
@@ -40,7 +43,7 @@ URL_ULTIMA = f"https://api.github.com/repos/{REPO}/releases/latest"
 ID_APP = "local.mezquitapdf.app"
 CADA = 24 * 3600            # s entre comprobaciones automáticas
 ESPERA_INICIO = 6000        # ms tras abrir la app
-CARPETA = Path.home() / "Library" / "Caches" / "MezquitaPDF" / "actualizacion"
+CARPETA = carpeta_cache() / "actualizacion"
 
 
 @dataclass
@@ -93,9 +96,13 @@ def _pedir(url: str, timeout: float = 15):
     return urllib.request.urlopen(peticion, timeout=timeout, context=_contexto_ssl())
 
 
-def interpretar(datos: dict, arq: str) -> Version:
-    """Datos de la API de GitHub → Version (con el instalador de esta arquitectura)."""
-    nombre = f"MezquitaPDF-{arq}.dmg"
+def nombre_instalador() -> str:
+    """Instalador publicado que corresponde a este equipo."""
+    return "MezquitaPDF-windows.exe" if ES_WINDOWS else f"MezquitaPDF-{arquitectura()}.dmg"
+
+
+def interpretar(datos: dict, nombre: str) -> Version:
+    """Datos de la API de GitHub → Version (con el instalador `nombre`, p. ej. «MezquitaPDF-intel.dmg»)."""
     activo = next((a for a in datos.get("assets") or [] if a.get("name") == nombre), None)
     notas = datos.get("body") or ""
     if "## Novedades" in notas:  # sin las instrucciones de instalación del principio
@@ -111,7 +118,7 @@ def interpretar(datos: dict, arq: str) -> Version:
 
 def consultar() -> Version:
     with _pedir(URL_ULTIMA) as r:
-        return interpretar(json.load(r), arquitectura())
+        return interpretar(json.load(r), nombre_instalador())
 
 
 # ----------------------------------------------------------------------------
@@ -123,7 +130,8 @@ class Cancelado(Exception):
 
 def descargar(v: Version, destino: Path, progreso=None, cancelar: threading.Event | None = None) -> Path:
     destino.mkdir(parents=True, exist_ok=True)
-    dmg = destino / f"MezquitaPDF-{v.numero}.dmg"
+    original = Path(v.url.split("?", 1)[0]).name or nombre_instalador()
+    dmg = destino / f"{Path(original).stem}-{v.numero}{Path(original).suffix}"  # .dmg o .exe
     huella = hashlib.sha256()
     hecho = 0
     with _pedir(v.url, timeout=60) as r, open(dmg, "wb") as f:
@@ -184,9 +192,26 @@ fi
 """
 
 
+def guion_windows(pid: int, instalador: Path, exe: Path, abrir: bool) -> str:
+    """PowerShell: espera a que se cierre la app, instala en silencio y (si se pide) la abre."""
+    def q(texto) -> str:
+        return "'" + str(texto).replace("'", "''") + "'"
+    lineas = [
+        "# Generado por Mezquita PDF: instala la actualización cuando la app se ha cerrado.",
+        f"Wait-Process -Id {pid} -Timeout 120 -ErrorAction SilentlyContinue",
+        f"Start-Process -FilePath {q(instalador)} -Wait -ArgumentList "
+        "'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS'",
+    ]
+    if abrir:
+        lineas.append(f"Start-Process -FilePath {q(exe)}")
+    return "\n".join(lineas)
+
+
 def se_puede_sustituir(app: Path | None) -> bool:
     if app is None:
         return False
+    if ES_WINDOWS:  # instalada con nuestro instalador, en una carpeta del usuario
+        return (app.parent / "unins000.exe").exists() and os.access(app.parent, os.W_OK)
     ruta = str(app)
     if "/AppTranslocation/" in ruta or ruta.startswith("/Volumes/"):
         return False
@@ -346,7 +371,10 @@ class Actualizador(QObject):
                 limpiar()
                 dmg = descargar(v, CARPETA, lambda h, t: self._progreso.emit(h, t), self._cancelar)
                 if not en_su_sitio:
-                    self._preparado.emit(("dmg", dmg), None)
+                    self._preparado.emit(("abrir", dmg), None)
+                    return
+                if ES_WINDOWS:  # el instalador hace el resto al cerrar la app
+                    self._preparado.emit(("instalador", dmg), None)
                     return
                 self._progreso.emit(-1, 0)
                 nueva = preparar_app(dmg, v.numero, CARPETA)
@@ -383,14 +411,18 @@ class Actualizador(QObject):
                                 "También puedes descargarla de la página de la versión.")
             return
         tipo, ruta = resultado
-        if tipo == "dmg":
-            subprocess.run(["/usr/bin/open", str(ruta)], check=False)
-            QMessageBox.information(_padre(), "Actualizar Mezquita PDF",
-                                    "Se ha abierto el instalador. Cierra Mezquita PDF, arrastra la app nueva a "
-                                    "Aplicaciones (sustituye la anterior) y vuelve a abrirla.")
+        if tipo == "abrir":
+            if ES_WINDOWS:
+                os.startfile(str(ruta))
+                texto = "Se ha abierto el instalador: cierra Mezquita PDF y sigue sus pasos."
+            else:
+                subprocess.run(["/usr/bin/open", str(ruta)], check=False)
+                texto = ("Se ha abierto el instalador. Cierra Mezquita PDF, arrastra la app nueva a "
+                         "Aplicaciones (sustituye la anterior) y vuelve a abrirla.")
+            QMessageBox.information(_padre(), "Actualizar Mezquita PDF", texto)
             return
         app = self._app_actual()
-        self._pendiente = (app, ruta, CARPETA / "anterior.app")
+        self._pendiente = (app, ruta, CARPETA / "anterior.app")  # en Windows, `ruta` es el instalador
         caja = QMessageBox(_padre())
         caja.setIconPixmap(tema.pixmap_logo(56))
         caja.setWindowTitle("Actualizar Mezquita PDF")
@@ -421,11 +453,19 @@ class Actualizador(QObject):
         if self._pendiente is None:
             return
         app, nueva, anterior = self._pendiente
+        self._pendiente = None
+        if ES_WINDOWS:
+            orden = guion_windows(os.getpid(), nueva, app, self._abrir_tras_instalar)
+            codificado = base64.b64encode(orden.encode("utf-16-le")).decode()
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                              "-EncodedCommand", codificado],
+                             creationflags=0x08000000 | 0x00000200,  # sin ventana, grupo propio
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
         guion = CARPETA / "instalar.sh"
         guion.write_text(guion_sustitucion(os.getpid(), app, nueva, anterior, self._abrir_tras_instalar))
         subprocess.Popen(["/bin/bash", str(guion)], start_new_session=True,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self._pendiente = None
 
     @staticmethod
     def _app_actual() -> Path | None:

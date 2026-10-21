@@ -107,6 +107,9 @@ def raices_confianza_sistema() -> list:
     if _raices_cache is not None:
         return _raices_cache
     raices = []
+    if sys.platform == "win32":
+        from . import almacen_windows
+        raices = almacen_windows.raices()
     if sys.platform == "darwin":
         try:
             pem = subprocess.run(

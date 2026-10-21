@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from . import firma_digital as fd
 from . import llavero, tema
+from .plataforma import ES_WINDOWS, NOMBRE_ALMACEN
 
 
 # ----------------------------------------------------------------------------
@@ -519,7 +520,7 @@ class FilaCertificado(QWidget):
 
 
 class DialogoFirmaDigital(QDialog):
-    """Elegir el certificado (del Llavero o de un archivo) y los datos de la firma."""
+    """Elegir el certificado (del sistema o de un archivo) y los datos de la firma."""
 
     def __init__(self, parent=None, visible=True, rutas_llaveros: list[str] | None = None):
         super().__init__(parent)
@@ -656,12 +657,16 @@ class DialogoFirmaDigital(QDialog):
                 if seleccionar is None or cert.huella == ultima:
                     seleccionar = item
         if not llavero.DISPONIBLE:
-            self.aviso_lista.setText("Los certificados del sistema solo se pueden usar en macOS. "
+            self.aviso_lista.setText("En este equipo no se pueden usar los certificados del sistema. "
                                      "Usa un archivo .p12 / .pfx.")
         elif not self._certificados:
-            self.aviso_lista.setText("No se ha encontrado ningún certificado de firma en el Llavero. "
+            self.aviso_lista.setText(f"No se ha encontrado ningún certificado de firma en el {NOMBRE_ALMACEN}. "
                                      "Si usas DNIe, conecta el lector y pulsa el botón de recargar; "
                                      "también puedes usar un archivo .p12 / .pfx.")
+        elif ES_WINDOWS:
+            self.aviso_lista.setText("Son los certificados de tu almacén de Windows («Personal»). Si el "
+                                     "certificado está en una tarjeta (DNIe…), Windows te pedirá el PIN. "
+                                     "La clave privada nunca sale del almacén.")
         else:
             self.aviso_lista.setText("La primera vez, macOS te pedirá permiso para usar el certificado: "
                                      "pulsa «Permitir siempre» para que no vuelva a preguntar. "

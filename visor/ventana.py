@@ -30,6 +30,7 @@ from .dialogos import (
 )
 from .documento import Documento, parsear_rango as _parsear_rango
 from .miniaturas import ListaMiniaturas, tam_miniatura
+from .plataforma import ES_MAC, ES_WINDOWS, NOMBRE_EXPLORADOR, teclas
 from .vista import Herramienta, VistaPDF, a_rgb
 
 FILTRO_PDF = "Documentos PDF (*.pdf);;Todos los archivos (*)"
@@ -248,7 +249,7 @@ class VentanaPrincipal(QMainWindow):
         self.a_girar_der = A("Girar página a la derecha", lambda: self.girar_pagina(90), "Ctrl+R", "rotate-right")
         self.a_girar_izq = A("Girar página a la izquierda", lambda: self.girar_pagina(-90), "Ctrl+Shift+R", "rotate-left")
         self.a_eliminar_pag = A("Eliminar página", lambda: self.eliminar_paginas(), None, "delete-outline",
-                                "Eliminar las páginas seleccionadas (o ⌫ en las miniaturas)")
+                                teclas("Eliminar las páginas seleccionadas (o ⌫ en las miniaturas)"))
         self.a_pag_blanco = A("Insertar página en blanco", self.insertar_blanco, None, "file-plus-outline")
         self.a_pag_archivo = A("Insertar páginas desde archivo…", self.insertar_desde_archivo, None, None,
                                "Insertar PDF o imágenes después de la página actual (también puedes soltarlos en las miniaturas)")
@@ -266,7 +267,7 @@ class VentanaPrincipal(QMainWindow):
         self.a_whatsapp = A("Enviar por WhatsApp…", self.compartir_whatsapp, None, "whatsapp")
         tema.poner_icono(self.a_whatsapp, "whatsapp", tema.COLOR_WHATSAPP)
         self.a_copiar_archivo = A("Copiar el archivo (para pegarlo en otra app)", self.copiar_archivo, None, "content-copy")
-        self.a_finder = A("Mostrar en Finder", self.mostrar_en_finder, None, "folder-search-outline")
+        self.a_finder = A(f"Mostrar en {NOMBRE_EXPLORADOR}", self.mostrar_en_finder, None, "folder-search-outline")
 
         # Herramientas
         self.grupo_herr = QActionGroup(self)
@@ -724,7 +725,7 @@ class VentanaPrincipal(QMainWindow):
         actual = sistema.app_predeterminada_pdf()
         texto = ("<b>Abre tus PDF directamente con Mezquita PDF.</b><br>"
                  + (f"Ahora se abren con {actual}." if actual else ""))
-        if not sistema.en_aplicaciones():
+        if ES_MAC and not sistema.en_aplicaciones():
             texto += "<br><small>Consejo: mueve antes la app a la carpeta Aplicaciones.</small>"
         self.bienvenida.mostrar_aviso(texto, "Usar por defecto", self.hacer_predeterminada,
                                       self._no_ofrecer_predeterminada)
@@ -735,7 +736,7 @@ class VentanaPrincipal(QMainWindow):
 
     def hacer_predeterminada(self) -> None:
         if sistema.ruta_app() is None:
-            self.aviso("Esta opción está disponible en la app instalada (Mezquita PDF.app)", 5)
+            self.aviso("Esta opción está disponible en la app instalada", 5)
             return
         self._puente = _Puente()
         self._puente.resultado.connect(self._tras_predeterminada)
@@ -743,6 +744,14 @@ class VentanaPrincipal(QMainWindow):
         sistema.hacer_predeterminada(lambda error: puente.resultado.emit(error))
 
     def _tras_predeterminada(self, error) -> None:
+        if error == sistema.CONFIGURACION:  # Windows: lo elige el usuario en Configuración
+            QMessageBox.information(
+                self, "App predeterminada",
+                "Se ha abierto la Configuración de Windows. En «.pdf», elige <b>Mezquita PDF</b> "
+                "(o pulsa «Establecer como predeterminado» si aparece).<br><br>"
+                "También puedes hacerlo con clic derecho sobre un PDF → «Abrir con» → «Elegir otra "
+                "aplicación» → Mezquita PDF → «Siempre».")
+            return
         if error:
             QMessageBox.warning(self, "App predeterminada",
                                 f"macOS no ha permitido el cambio:\n{error}\n\n"
@@ -1254,7 +1263,7 @@ class VentanaPrincipal(QMainWindow):
         self.documento.doc.delete_pages(indices)
         siguiente = min(indices[0], self.documento.num_paginas - 1)
         self._tras_cambio_estructura(ir_a=siguiente)
-        self.aviso((f"Página {lista} eliminada" if n == 1 else f"{n} páginas eliminadas") + " · ⌘Z para deshacer", 4)
+        self.aviso((f"Página {lista} eliminada" if n == 1 else f"{n} páginas eliminadas") + teclas(" · ⌘Z para deshacer"), 4)
 
     def mover_paginas_a(self, indices: list[int], destino: int) -> None:
         """Reordena: lleva las páginas arrastradas en las miniaturas a `destino` (0…n)."""
@@ -1294,7 +1303,7 @@ class VentanaPrincipal(QMainWindow):
         self._tras_cambio_estructura(ir_a=posicion, seleccion=list(range(posicion, posicion + insertadas)))
         origen = f"«{nombres[0]}»" if len(nombres) == 1 else f"{len(nombres)} archivos"
         self.aviso(f"{insertadas} página{'s' if insertadas != 1 else ''} de {origen} añadida"
-                   f"{'s' if insertadas != 1 else ''} · ⌘Z para deshacer", 5)
+                   f"{'s' if insertadas != 1 else ''}" + teclas(" · ⌘Z para deshacer"), 5)
 
     def insertar_blanco(self, despues_de: int | None = None) -> None:
         if self.documento is None:
@@ -1325,7 +1334,7 @@ class VentanaPrincipal(QMainWindow):
         else:
             mostrar_en_ventana(nuevo)
             ventana = next(v for v in _ventanas if v.documento is nuevo)
-        ventana.aviso(f"Documento combinado: {nuevo.num_paginas} páginas. Guárdalo con ⌘S", 6)
+        ventana.aviso(teclas(f"Documento combinado: {nuevo.num_paginas} páginas. Guárdalo con ⌘S"), 6)
 
     def extraer_paginas(self, rango: str | None = None) -> None:
         if self.documento is None:
@@ -1611,7 +1620,7 @@ class VentanaPrincipal(QMainWindow):
                             rotate=(-pagina.rotation) % 360)
         self.vista._modificado(indice)
         self.set_herramienta(Herramienta.SELECCIONAR)
-        self.aviso("Firma colocada. Guarda el documento para conservarla (⌘S).", 8)
+        self.aviso(teclas("Firma colocada. Guarda el documento para conservarla (⌘S)."), 8)
 
     def iniciar_firma_digital(self) -> None:
         self.set_herramienta(Herramienta.FIRMA_DIGITAL)
@@ -1762,6 +1771,7 @@ class VentanaPrincipal(QMainWindow):
         mensajes = {
             "Mail": "Mensaje nuevo en Mail con el PDF adjunto: añade el destinatario y envíalo",
             "Outlook": "Mensaje nuevo en Outlook con el PDF adjunto",
+            "correo": "Mensaje nuevo con el PDF adjunto: añade el destinatario y envíalo",
             "mailto": "Se ha abierto tu correo: adjunta el PDF desde la carpeta que se ha abierto",
         }
         self.aviso(mensajes.get(metodo, "Mensaje creado"), 6)
@@ -1773,9 +1783,9 @@ class VentanaPrincipal(QMainWindow):
         dlg = DialogoWhatsApp(ruta, self)
         if dlg.exec() == QDialog.Accepted:
             if dlg.modo == "app":
-                self.aviso("PDF copiado · en el chat de WhatsApp pulsa ⌘V y envía", 8)
+                self.aviso(teclas("PDF copiado · en el chat de WhatsApp pulsa ⌘V y envía"), 8)
             else:
-                self.aviso("PDF copiado · pégalo (⌘V) o arrástralo al chat de WhatsApp Web", 8)
+                self.aviso(teclas("PDF copiado · pégalo (⌘V) o arrástralo al chat de WhatsApp Web"), 8)
 
     def _compartir_servicio(self, servicio) -> None:
         ruta = self._archivo_para_compartir()
@@ -1786,7 +1796,7 @@ class VentanaPrincipal(QMainWindow):
         ruta = self._archivo_para_compartir()
         if ruta:
             compartir.copiar_archivo(ruta)
-            self.aviso("Archivo copiado: pégalo con ⌘V en un correo, chat o carpeta")
+            self.aviso(teclas("Archivo copiado: pégalo con ⌘V en un correo, chat o carpeta"))
 
     def mostrar_en_finder(self) -> None:
         if self.documento and self.documento.ruta:

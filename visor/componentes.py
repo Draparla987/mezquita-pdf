@@ -237,7 +237,7 @@ class DialogoWhatsApp(QDialog):
         t = QLabel("Enviar por WhatsApp")
         t.setStyleSheet("font-size: 18px; font-weight: 700;")
         st = QLabel("El PDF quedará listo para pegarlo en el chat." if instalado
-                    else "No se ha encontrado WhatsApp para Mac: se usará WhatsApp Web.")
+                    else f"No se ha encontrado WhatsApp para {'Mac' if ES_MAC else 'Windows'}: se usará WhatsApp Web.")
         st.setStyleSheet(f"color: {p.texto_suave};")
         titulos.addWidget(t)
         titulos.addWidget(st)
@@ -260,8 +260,8 @@ class DialogoWhatsApp(QDialog):
         pasos = QLabel(
             "<ol style='margin-left:-18px'>"
             "<li>Pulsa <b>Abrir WhatsApp</b>: el PDF se copia automáticamente.</li>"
-            + ("<li>En el chat, pulsa <b>⌘V</b> y luego <b>Enviar</b>.</li>" if instalado else
-               "<li>En el chat de WhatsApp Web, pulsa <b>⌘V</b> o arrastra la ficha de arriba.</li>")
+            + (teclas("<li>En el chat, pulsa <b>⌘V</b> y luego <b>Enviar</b>.</li>") if instalado else
+               teclas("<li>En el chat de WhatsApp Web, pulsa <b>⌘V</b> o arrastra la ficha de arriba.</li>"))
             + "</ol>"
         )
         pasos.setStyleSheet(f"color: {p.texto_suave};")

@@ -206,6 +206,9 @@ def hoja_estilos(p: Paleta) -> str:
     QComboBox QAbstractItemView {{ background: {p.superficie}; border: 1px solid {p.borde};
                                    selection-background-color: {p.acento_suave}; selection-color: {p.acento}; }}
 
+    QMenuBar {{ background: {p.panel}; border-bottom: 1px solid {p.borde}; padding: 2px 6px; color: {p.texto}; }}
+    QMenuBar::item {{ padding: 5px 10px; border-radius: 6px; background: transparent; }}
+    QMenuBar::item:selected {{ background: {p.acento_suave}; color: {p.acento}; }}
     QMenu {{ background: {p.superficie}; border: 1px solid {p.borde}; border-radius: 10px; padding: 6px; }}
     QMenu::item {{ padding: 7px 26px 7px 10px; border-radius: 6px; color: {p.texto}; }}
     QMenu::item:selected {{ background: {p.acento_suave}; color: {p.acento}; }}

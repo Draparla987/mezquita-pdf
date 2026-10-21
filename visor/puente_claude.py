@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from . import mcp_servidor as mcp
 from . import tema
+from .plataforma import ES_MAC, ES_WINDOWS, teclas
 from .combinar import Parte, abrir_archivo, combinar
 from .documento import Documento, parsear_rango
 
@@ -65,7 +66,8 @@ class PuenteClaude(QObject):
         if self.servidor.isListening():
             return True
         ruta = mcp.ruta_socket()
-        Path(ruta).parent.mkdir(parents=True, exist_ok=True)
+        if not ES_WINDOWS:  # en Windows es el nombre de una tubería, no un archivo
+            Path(ruta).parent.mkdir(parents=True, exist_ok=True)
         QLocalServer.removeServer(ruta)  # restos de una ejecución anterior
         return self.servidor.listen(ruta)
 
@@ -356,7 +358,7 @@ def h_resaltar(args) -> dict:
         _refrescar(v, tocadas)
         v.vista.ir_a_pagina(min(tocadas))
         verbo = {"resaltar": "resaltado", "subrayar": "subrayado", "tachar": "tachado"}[estilo]
-        _aviso(v, f"ha {verbo} {hechos} fragmento{'s' if hechos != 1 else ''} · ⌘Z para deshacer")
+        _aviso(v, teclas(f"ha {verbo} {hechos} fragmento{'s' if hechos != 1 else ''} · ⌘Z para deshacer"))
     detalle = "\n".join(f"· «{t}»: {n}" for t, n in por_texto.items())
     nota = "" if hechos < MAX_MARCAS else f"\n(Se ha parado en {MAX_MARCAS} marcas.)"
     return {"texto": f"{hechos} marcas en total.\n{detalle}{nota}"
@@ -475,7 +477,7 @@ def h_rellenar_formulario(args) -> dict:
     if rellenados:
         _refrescar(v, tocadas)
         v.vista.ir_a_pagina(min(tocadas))
-        _aviso(v, f"ha rellenado {len(rellenados)} campo{'s' if len(rellenados) != 1 else ''} · ⌘Z para deshacer")
+        _aviso(v, teclas(f"ha rellenado {len(rellenados)} campo{'s' if len(rellenados) != 1 else ''} · ⌘Z para deshacer"))
     texto = f"Campos rellenados: {len(rellenados)}."
     if errores:
         texto += "\nProblemas:\n" + "\n".join(f"· {e}" for e in errores)
@@ -507,7 +509,7 @@ def h_eliminar_paginas(args) -> dict:
         raise ErrorClaude("No se pueden eliminar todas las páginas: un PDF debe tener al menos una.")
     v.eliminar_paginas(paginas, confirmar=False)
     return {"texto": f"Eliminadas las páginas {_lista(paginas)}. Ahora tiene {v.documento.num_paginas} "
-                     "(el usuario puede deshacerlo con ⌘Z)."}
+                     + teclas("(el usuario puede deshacerlo con ⌘Z).")}
 
 
 def h_mover_paginas(args) -> dict:
@@ -521,7 +523,7 @@ def h_mover_paginas(args) -> dict:
     if not 1 <= delante <= n + 1:
         raise ErrorClaude(f"«delante_de» debe estar entre 1 y {n + 1}.")
     v.mover_paginas_a(paginas, delante - 1)
-    _aviso(v, "ha cambiado el orden de las páginas · ⌘Z para deshacer")
+    _aviso(v, teclas("ha cambiado el orden de las páginas · ⌘Z para deshacer"))
     nuevas = v.miniaturas.seleccionadas()
     return {"texto": f"Páginas movidas; ahora ocupan las posiciones {_lista(nuevas)}."}
 
@@ -572,7 +574,7 @@ def h_combinar_documentos(args) -> dict:
     nuevo = Documento(datos=datos, nombre="Combinado.pdf")
     nuevo.modificado = True
     v = V.mostrar_en_ventana(nuevo, activar=False)
-    _aviso(v, f"ha combinado {len(partes)} documentos · guárdalo con ⌘S")
+    _aviso(v, teclas(f"ha combinado {len(partes)} documentos · guárdalo con ⌘S"))
     return {"texto": f"Creado «Combinado.pdf» con {nuevo.num_paginas} páginas a partir de {len(partes)} documentos. "
                      "Está abierto en Mezquita PDF sin guardar y es ahora el documento activo."}
 
@@ -661,7 +663,7 @@ class DialogoClaude(QDialog):
             "<i>«Rellena este formulario con estos datos…»</i> · <i>«Une estos tres PDF de Descargas»</i> · "
             "<i>«Explícame el texto que he seleccionado»</i><br><br>"
             "Claude trabaja sobre los documentos abiertos aquí: verás cada cambio al momento, firmado como "
-            "«Claude», y podrás deshacerlo con ⌘Z. Nada se guarda en disco hasta que tú lo guardes.")
+            + teclas("«Claude», y podrás deshacerlo con ⌘Z. Nada se guarda en disco hasta que tú lo guardes."))
         texto.setWordWrap(True)
         texto.setTextFormat(Qt.RichText)
         capa.addWidget(texto)
@@ -707,7 +709,9 @@ class DialogoClaude(QDialog):
             self.b_instalar.setObjectName("")
         elif mcp.extension_instalada():
             self.estado.setText(f"<span style='color:{p.exito}'>●</span> <b>Conectada.</b> Si acabas de "
-                                "instalarla, cierra la app de Claude (⌘Q) y vuelve a abrirla.")
+                                + ("instalarla, cierra la app de Claude (⌘Q) y vuelve a abrirla." if ES_MAC else
+                                   "instalarla, cierra la app de Claude del todo (también desde el icono junto al "
+                                   "reloj) y vuelve a abrirla."))
             self.b_instalar.setText("Quitar de Claude")
             self.b_instalar.setObjectName("")
         else:

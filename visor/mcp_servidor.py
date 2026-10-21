@@ -18,15 +18,23 @@ import sys
 import time
 from pathlib import Path
 
+from .plataforma import ES_MAC, ES_WINDOWS, carpeta_base, teclas, usuario
+
 NOMBRE_SERVIDOR = "mezquita-pdf"
 PROTOCOLOS = ("2025-06-18", "2025-03-26", "2024-11-05")
 LISTAS_VACIAS = {"resources/list": "resources", "resources/templates/list": "resourceTemplates", "prompts/list": "prompts"}
 ESPERA_RESPUESTA = 600  # s: puede haber diálogos (p. ej. la contraseña de un PDF)
-CONFIG_CLAUDE = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-APP_INSTALADA = Path("/Applications/Mezquita PDF.app/Contents/MacOS/Mezquita PDF")
+if ES_WINDOWS:
+    CONFIG_CLAUDE = Path(os.environ.get("APPDATA", Path.home())) / "Claude" / "claude_desktop_config.json"
+    # En Windows, Claude lanza un programa de consola (la app normal no tiene entrada/salida estándar)
+    APP_INSTALADA = (Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "Mezquita PDF"
+                     / "mezquita-mcp.exe")
+else:
+    CONFIG_CLAUDE = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    APP_INSTALADA = Path("/Applications/Mezquita PDF.app/Contents/MacOS/Mezquita PDF")
 
-INSTRUCCIONES = (
-    "Mezquita PDF es el visor y editor de PDF del usuario en su Mac. Usa «estado» para ver qué "
+INSTRUCCIONES = teclas(
+    "Mezquita PDF es el visor y editor de PDF del usuario en su ordenador. Usa «estado» para ver qué "
     "documentos tiene abiertos (y el texto que tenga seleccionado). Lee el texto antes de resaltar o "
     "anotar, y no inventes contenido. Los cambios se ven al momento en Mezquita PDF, el usuario puede "
     "deshacerlos con ⌘Z y no se guardan en disco hasta que él los guarde con ⌘S. Las páginas se "
@@ -40,10 +48,14 @@ INSTRUCCIONES = (
 def carpeta_datos() -> Path:
     if os.environ.get("MEZQUITA_DATOS"):  # pruebas
         return Path(os.environ["MEZQUITA_DATOS"])
-    return Path.home() / "Library" / "Application Support" / "MezquitaPDF"
+    return carpeta_base()
 
 
 def ruta_socket() -> str:
+    """Dirección del enlace local con la app: un socket en macOS, una tubería con nombre en Windows."""
+    if ES_WINDOWS:
+        sufijo = "-pruebas" if os.environ.get("MEZQUITA_DATOS") else ""
+        return f"mezquita-pdf-claude-{usuario()}{sufijo}"
     return str(carpeta_datos() / "claude.sock")
 
 
@@ -52,11 +64,15 @@ def comando_mcp() -> tuple[str, list[str]]:
     if APP_INSTALADA.exists():
         return str(APP_INSTALADA), ["--mcp"]
     if getattr(sys, "frozen", False):
-        return sys.executable, ["--mcp"]
+        exe = Path(sys.executable)
+        return str(exe.with_name("mezquita-mcp.exe") if ES_WINDOWS else exe), ["--mcp"]
     return sys.executable, [str(Path(__file__).resolve().parent.parent / "main.py"), "--mcp"]
 
 
 def claude_disponible() -> bool:
+    if ES_WINDOWS:
+        local = Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        return CONFIG_CLAUDE.parent.is_dir() or (local / "AnthropicClaude").is_dir()
     return CONFIG_CLAUDE.parent.is_dir() or Path("/Applications/Claude.app").exists()
 
 
@@ -159,7 +175,7 @@ HERRAMIENTAS = [
     _h("girar_paginas", "Gira páginas.",
        {"paginas": _PAGINAS, "grados": {"type": "integer", "enum": [90, -90, 180]}, "documento": _DOC},
        ["paginas", "grados"]),
-    _h("eliminar_paginas", "Elimina páginas del documento abierto (se puede deshacer con ⌘Z).",
+    _h("eliminar_paginas", teclas("Elimina páginas del documento abierto (se puede deshacer con ⌘Z)."),
        {"paginas": _PAGINAS, "documento": _DOC}, ["paginas"], destructiva=True),
     _h("mover_paginas", "Cambia el orden: lleva las páginas indicadas delante de la página «delante_de» "
        "(usa el nº de páginas + 1 para llevarlas al final).",
@@ -175,7 +191,7 @@ HERRAMIENTAS = [
        ["rutas"]),
     _h("extraer_paginas", "Copia páginas a un documento nuevo que se abre en otra ventana (sin guardar).",
        {"paginas": _PAGINAS, "documento": _DOC}, ["paginas"]),
-    _h("deshacer", "Deshace el último cambio del documento (como ⌘Z).", {"documento": _DOC}),
+    _h("deshacer", teclas("Deshace el último cambio del documento (como ⌘Z)."), {"documento": _DOC}),
 ]
 
 
@@ -186,7 +202,34 @@ class SinConexion(Exception):
     pass
 
 
-def _conectar() -> socket.socket:
+class _Tuberia:
+    """Tubería con nombre de Windows con la misma forma de uso que un socket."""
+
+    def __init__(self, nombre: str):
+        self._f = open(rf"\\.\pipe\{nombre}", "r+b", buffering=0)
+
+    def settimeout(self, _segundos) -> None:
+        pass
+
+    def sendall(self, datos: bytes) -> None:
+        self._f.write(datos)
+
+    def recv(self, n: int) -> bytes:
+        try:
+            return self._f.read(n) or b""
+        except (BrokenPipeError, OSError):
+            return b""  # la app ha cerrado su extremo tras responder
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self._f.close()
+
+
+def _conectar():
+    if ES_WINDOWS:
+        return _Tuberia(ruta_socket())
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(ruta_socket())
     return s
@@ -196,6 +239,12 @@ def _abrir_app() -> None:
     """Abre Mezquita PDF en segundo plano (sin quitarle el foco a Claude)."""
     if os.environ.get("MEZQUITA_DATOS"):
         return  # pruebas: nunca se abre la app real
+    if ES_WINDOWS:
+        exe = Path(sys.executable).with_name("Mezquita PDF.exe") if getattr(sys, "frozen", False) else None
+        if exe is not None and exe.exists():
+            subprocess.Popen([str(exe)], creationflags=0x00000008 | 0x00000200,  # DETACHED | NEW_GROUP
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return
     if getattr(sys, "frozen", False):
         paquete = Path(sys.executable).resolve().parents[2]  # …/Mezquita PDF.app
         orden = ["/usr/bin/open", "-g", "-a", str(paquete)]

@@ -44,8 +44,9 @@ def traduccion_qt() -> "QTranslator | None":
     import PySide6
     from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
     traductor = QTranslator()
+    base = Path(PySide6.__file__).resolve().parent
     for carpeta in (QLibraryInfo.path(QLibraryInfo.TranslationsPath),
-                    str(Path(PySide6.__file__).resolve().parent / "Qt" / "translations")):
+                    str(base / "Qt" / "translations"), str(base / "translations")):  # macOS / Windows
         if traductor.load(QLocale(QLocale.Spanish, QLocale.Spain), "qtbase", "_", carpeta):
             return traductor
     return None
@@ -56,7 +57,8 @@ def diagnostico() -> int:
     from visor import compartir, llavero
     print(f"{tema.NOMBRE_APP} {tema.VERSION}")
     certs = llavero.listar_certificados() if llavero.DISPONIBLE else []
-    print(f"Llavero disponible: {llavero.DISPONIBLE} · certificados de firma: {len(certs)} "
+    almacen = "Llavero" if sys.platform == "darwin" else "Almacén de certificados"
+    print(f"{almacen} disponible: {llavero.DISPONIBLE} · certificados de firma: {len(certs)} "
           f"(vigentes: {sum(c.utilizable for c in certs)})")
     print(f"Correo predeterminado: {compartir.app_correo_predeterminada() or 'desconocido'}")
     print(f"WhatsApp instalado: {compartir.whatsapp_instalado()}")
@@ -74,15 +76,38 @@ def diagnostico() -> int:
     return 0
 
 
+def _traer_delante(rutas: list[str]) -> None:
+    """Otra copia de la app (Windows) nos pasa PDF para abrir; si no hay, se muestra una ventana."""
+    for ruta in rutas:
+        abrir_en_ventana(ruta)
+    ventana = _ventanas[-1] if _ventanas else nueva_ventana()
+    if ventana.isMinimized():
+        ventana.showNormal()
+    ventana.raise_()
+    ventana.activateWindow()
+
+
 def main() -> int:
     if "--diagnostico" in sys.argv:
         return diagnostico()
+    if sys.platform == "win32":  # en la barra de tareas, «Mezquita PDF» con su icono (no Python)
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MezquitaPDF.App")
+        except Exception:
+            pass
     app = Aplicacion(sys.argv)
     app.setApplicationName(tema.NOMBRE_APP)
     app.setApplicationDisplayName(tema.NOMBRE_APP)
     app.setOrganizationName("MezquitaPDF")
     app.setOrganizationDomain("mezquitapdf.local")
     app.setApplicationVersion(tema.VERSION)
+    archivos = [a for a in sys.argv[1:] if a.lower().endswith(".pdf")]
+    if sys.platform == "win32":
+        from visor import instancia
+        if instancia.enviar_a_la_abierta(archivos):
+            return 0  # ya estaba abierta: le hemos pasado los PDF
+        app._instancia = instancia.Instancia(app, _traer_delante)
     traductor = traduccion_qt()
     if traductor is not None:
         app.installTranslator(traductor)
@@ -104,7 +129,6 @@ def main() -> int:
     except AttributeError:
         pass
 
-    archivos = [a for a in sys.argv[1:] if a.lower().endswith(".pdf")]
     if archivos:
         for ruta in archivos:
             abrir_en_ventana(ruta)
