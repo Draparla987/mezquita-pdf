@@ -648,11 +648,12 @@ class DialogoFirmaDigital(QDialog):
         for cert in self._certificados:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, cert.huella)
-            item.setSizeHint(QSize(100, 58))
+            fila = FilaCertificado(cert)
+            item.setSizeHint(QSize(100, max(58, fila.sizeHint().height())))  # la letra de Windows es más alta
             if not cert.utilizable:
                 item.setFlags(item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
             self.lista.addItem(item)
-            self.lista.setItemWidget(item, FilaCertificado(cert))
+            self.lista.setItemWidget(item, fila)
             if cert.utilizable and (seleccionar is None or cert.huella == ultima):
                 if seleccionar is None or cert.huella == ultima:
                     seleccionar = item
