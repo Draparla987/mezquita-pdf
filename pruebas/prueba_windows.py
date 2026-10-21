@@ -100,6 +100,7 @@ reloj.timeout.connect(comprobar_fin)
 reloj.start(100)
 QTimer.singleShot(30000, app.quit)
 app.exec()
+reloj.stop()  # si no, también cerraría el bucle de la prueba siguiente
 assert "error" not in resultados_hilo, resultados_hilo.get("error")
 estado = json.loads(resultados_hilo["estado"]["texto"])
 assert estado["documentos"][0]["nombre"] == "ejemplo.pdf", estado
