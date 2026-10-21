@@ -36,6 +36,21 @@ def migrar_ajustes() -> None:
     nuevos.setValue("migrado", True)
 
 
+def traduccion_qt() -> "QTranslator | None":
+    """Textos propios de Qt y del Mac en español: menú de la app («Ocultar», «Salir»…) y botones
+    estándar («Guardar», «No guardar», «Cancelar»…). La app entera está en español."""
+    from pathlib import Path
+
+    import PySide6
+    from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
+    traductor = QTranslator()
+    for carpeta in (QLibraryInfo.path(QLibraryInfo.TranslationsPath),
+                    str(Path(PySide6.__file__).resolve().parent / "Qt" / "translations")):
+        if traductor.load(QLocale(QLocale.Spanish, QLocale.Spain), "qtbase", "_", carpeta):
+            return traductor
+    return None
+
+
 def diagnostico() -> int:
     """Informe rápido (sin datos personales) para comprobar la instalación."""
     from visor import compartir, llavero
@@ -45,6 +60,7 @@ def diagnostico() -> int:
           f"(vigentes: {sum(c.utilizable for c in certs)})")
     print(f"Correo predeterminado: {compartir.app_correo_predeterminada() or 'desconocido'}")
     print(f"WhatsApp instalado: {compartir.whatsapp_instalado()}")
+    print(f"Textos del sistema en español: {'sí' if traduccion_qt() else 'no'}")
     from visor import sistema
     print(f"Los PDF se abren ahora con: {sistema.app_predeterminada_pdf() or 'desconocido'}"
           f" · Mezquita PDF es la predeterminada: {sistema.es_predeterminada()}")
@@ -67,6 +83,10 @@ def main() -> int:
     app.setOrganizationName("MezquitaPDF")
     app.setOrganizationDomain("mezquitapdf.local")
     app.setApplicationVersion(tema.VERSION)
+    traductor = traduccion_qt()
+    if traductor is not None:
+        app.installTranslator(traductor)
+        app._traductor = traductor  # que no lo libere el recolector
     app.setWindowIcon(QIcon(QPixmap.fromImage(tema.imagen_icono_app(512))))
     migrar_ajustes()
     tema.aplicar_tema(app)

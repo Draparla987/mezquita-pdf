@@ -143,6 +143,16 @@ def abrir_en_ventana(ruta: str) -> None:
     nueva_ventana(ruta)
 
 
+def _actualizar_automatico(si: bool) -> None:
+    """Guarda la opción y la refleja en el menú de todas las ventanas."""
+    QSettings().setValue("actualizaciones/automatico", si)
+    for v in _ventanas:
+        if v.a_auto_actualizar.isChecked() != si:
+            v.a_auto_actualizar.blockSignals(True)
+            v.a_auto_actualizar.setChecked(si)
+            v.a_auto_actualizar.blockSignals(False)
+
+
 def al_cambiar_tema() -> None:
     for v in _ventanas:
         v.refrescar_tema()
@@ -334,16 +344,17 @@ class VentanaPrincipal(QMainWindow):
                                             self.hacer_predeterminada)
         self.a_predeterminada.setEnabled(sistema.ruta_app() is not None)
         m.addSeparator()
+        # En el Mac, «Acerca de» y las actualizaciones van al menú «Mezquita PDF», como en el
+        # resto de apps (Qt los coloca allí según su papel); en otros sistemas se quedan en Ayuda.
+        self.a_acerca = m.addAction(f"Acerca de {tema.NOMBRE_APP}", self._acerca_de)
+        self.a_acerca.setMenuRole(QAction.AboutRole)
         a = m.addAction("Buscar actualizaciones…", self.buscar_actualizaciones)
-        tema.poner_icono(a, "update")
+        a.setMenuRole(QAction.ApplicationSpecificRole)
         self.a_auto_actualizar = m.addAction("Buscar actualizaciones automáticamente")
+        self.a_auto_actualizar.setMenuRole(QAction.ApplicationSpecificRole)
         self.a_auto_actualizar.setCheckable(True)
         self.a_auto_actualizar.setChecked(self.ajustes.value("actualizaciones/automatico", True, type=bool))
-        self.a_auto_actualizar.toggled.connect(lambda si: self.ajustes.setValue("actualizaciones/automatico", si))
-        m.aboutToShow.connect(lambda: self.a_auto_actualizar.setChecked(
-            self.ajustes.value("actualizaciones/automatico", True, type=bool)))
-        m.addSeparator()
-        self.a_acerca = m.addAction(f"Acerca de {tema.NOMBRE_APP}", self._acerca_de)
+        self.a_auto_actualizar.toggled.connect(_actualizar_automatico)
 
     # ------------------------------------------------------------------
     # Interfaz
