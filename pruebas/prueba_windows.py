@@ -81,7 +81,6 @@ def cliente():
     try:
         resultados_hilo["estado"] = mcp_servidor.pedir_a_la_app("estado", {})
         resultados_hilo["leer"] = mcp_servidor.pedir_a_la_app("leer_texto", {"paginas": "1"})
-        resultados_hilo["instancia"] = instancia.enviar_a_la_abierta([r"C:\documentos\contrato.pdf"])
     except Exception as exc:  # se comprueba abajo
         resultados_hilo["error"] = repr(exc)
 
@@ -92,11 +91,8 @@ fin_hilo: list = []
 
 
 def comprobar_fin():
-    # Se sale cuando el cliente ha terminado y la app ya ha recibido los PDF (o tras 5 s más)
     if hilo.ident and not hilo.is_alive():
-        fin_hilo.append(1)
-        if recibidos or len(fin_hilo) > 50:
-            app.quit()
+        app.quit()
 
 
 reloj = QTimer()
@@ -109,7 +105,21 @@ estado = json.loads(resultados_hilo["estado"]["texto"])
 assert estado["documentos"][0]["nombre"] == "ejemplo.pdf", estado
 assert "Página 1" in resultados_hilo["leer"]["texto"]
 ok("Claude habla con la app por la tubería con nombre")
-assert resultados_hilo["instancia"] and recibidos == [[r"C:\documentos\contrato.pdf"]], recibidos
+# Como en la realidad: otra copia de la app (otro proceso) se abre con un PDF y se lo pasa
+import subprocess  # noqa: E402
+
+segunda = subprocess.Popen([sys.executable, "-c", (
+    f"import sys; sys.path.insert(0, {str(RAIZ)!r}); from PySide6.QtCore import QCoreApplication; "
+    "a = QCoreApplication([]); from visor import instancia; "
+    "sys.exit(0 if instancia.enviar_a_la_abierta([r'C:\\documentos\\contrato.pdf']) else 3)")])
+espera = QTimer()
+espera.timeout.connect(lambda: app.quit() if recibidos and segunda.poll() is not None else None)
+espera.start(100)
+QTimer.singleShot(20000, app.quit)
+app.exec()
+espera.stop()
+assert segunda.wait(10) == 0, "la segunda copia no encontró la abierta"
+assert recibidos == [[r"C:\documentos\contrato.pdf"]], recibidos
 ok("una segunda copia le pasa los PDF a la que ya está abierta")
 
 # 4. Capturas de la interfaz en Windows ---------------------------------------------------
