@@ -21,7 +21,7 @@ os.environ["MEZQUITA_DATOS"] = str(TMP / "datos")
 CAPTURAS = RAIZ / "pruebas" / "salida_windows"
 CAPTURAS.mkdir(parents=True, exist_ok=True)
 
-from PySide6.QtCore import QTimer  # noqa: E402
+from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication([])
@@ -85,27 +85,27 @@ def cliente():
         resultados_hilo["error"] = repr(exc)
 
 
+def esperar(condicion, segundos: float) -> None:
+    """Deja trabajar a la interfaz hasta que se cumpla `condicion` (sin cerrar ventanas, que es lo
+    que haría app.quit() en Qt 6)."""
+    bucle = QEventLoop()
+    reloj = QTimer()
+    reloj.timeout.connect(lambda: bucle.quit() if condicion() else None)
+    reloj.start(100)
+    QTimer.singleShot(int(segundos * 1000), bucle.quit)
+    bucle.exec()
+    reloj.stop()
+
+
 hilo = threading.Thread(target=cliente, daemon=True)
-QTimer.singleShot(200, hilo.start)
-fin_hilo: list = []
-
-
-def comprobar_fin():
-    if hilo.ident and not hilo.is_alive():
-        app.quit()
-
-
-reloj = QTimer()
-reloj.timeout.connect(comprobar_fin)
-reloj.start(100)
-QTimer.singleShot(30000, app.quit)
-app.exec()
-reloj.stop()  # si no, también cerraría el bucle de la prueba siguiente
+hilo.start()
+esperar(lambda: not hilo.is_alive(), 30)
 assert "error" not in resultados_hilo, resultados_hilo.get("error")
 estado = json.loads(resultados_hilo["estado"]["texto"])
 assert estado["documentos"][0]["nombre"] == "ejemplo.pdf", estado
 assert "Página 1" in resultados_hilo["leer"]["texto"]
 ok("Claude habla con la app por la tubería con nombre")
+
 # Como en la realidad: otra copia de la app (otro proceso) se abre con un PDF y se lo pasa
 import subprocess  # noqa: E402
 
@@ -113,12 +113,7 @@ segunda = subprocess.Popen([sys.executable, "-c", (
     f"import sys; sys.path.insert(0, {str(RAIZ)!r}); from PySide6.QtCore import QCoreApplication; "
     "a = QCoreApplication([]); from visor import instancia; "
     "sys.exit(0 if instancia.enviar_a_la_abierta([r'C:\\documentos\\contrato.pdf']) else 3)")])
-espera = QTimer()
-espera.timeout.connect(lambda: app.quit() if recibidos and segunda.poll() is not None else None)
-espera.start(100)
-QTimer.singleShot(20000, app.quit)
-app.exec()
-espera.stop()
+esperar(lambda: recibidos and segunda.poll() is not None, 20)
 assert segunda.wait(10) == 0, "la segunda copia no encontró la abierta"
 assert recibidos == [[r"C:\documentos\contrato.pdf"]], recibidos
 ok("una segunda copia le pasa los PDF a la que ya está abierta")
@@ -126,12 +121,12 @@ ok("una segunda copia le pasa los PDF a la que ya está abierta")
 # 4. Capturas de la interfaz en Windows ---------------------------------------------------
 from visor.dialogos import DialogoFirmaDigital  # noqa: E402
 
+esperar(lambda: False, 1.5)  # que se pinten las páginas
 v.grab().save(str(CAPTURAS / "ventana.png"))
 dlg = DialogoFirmaDigital(v)
 dlg.resize(640, 760)
 dlg.show()
-QTimer.singleShot(400, app.quit)
-app.exec()
+esperar(lambda: False, 0.5)
 dlg.grab().save(str(CAPTURAS / "certificados.png"))
 dlg.close()
 v.documento.modificado = False
