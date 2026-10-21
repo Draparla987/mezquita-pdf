@@ -88,8 +88,19 @@ def cliente():
 
 hilo = threading.Thread(target=cliente, daemon=True)
 QTimer.singleShot(200, hilo.start)
+fin_hilo: list = []
+
+
+def comprobar_fin():
+    # Se sale cuando el cliente ha terminado y la app ya ha recibido los PDF (o tras 5 s más)
+    if hilo.ident and not hilo.is_alive():
+        fin_hilo.append(1)
+        if recibidos or len(fin_hilo) > 50:
+            app.quit()
+
+
 reloj = QTimer()
-reloj.timeout.connect(lambda: app.quit() if not hilo.is_alive() and hilo.ident else None)
+reloj.timeout.connect(comprobar_fin)
 reloj.start(100)
 QTimer.singleShot(30000, app.quit)
 app.exec()

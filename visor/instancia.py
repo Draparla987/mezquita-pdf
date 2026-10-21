@@ -56,7 +56,15 @@ class Instancia(QObject):
             sock = self.servidor.nextPendingConnection()
             self._buffers[id(sock)] = bytearray()
             sock.readyRead.connect(lambda s=sock: self._leer(s))
-            sock.disconnected.connect(lambda s=sock: (self._buffers.pop(id(s), None), s.deleteLater()))
+            sock.disconnected.connect(lambda s=sock: self._cerrado(s))
+            if sock.bytesAvailable():  # los datos pueden llegar junto con la conexión
+                self._leer(sock)
+
+    def _cerrado(self, sock) -> None:
+        if sock.bytesAvailable():  # …o justo antes de que la otra copia se desconecte
+            self._leer(sock)
+        self._buffers.pop(id(sock), None)
+        sock.deleteLater()
 
     def _leer(self, sock) -> None:
         buf = self._buffers.get(id(sock))
