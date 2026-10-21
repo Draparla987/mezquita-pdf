@@ -383,6 +383,22 @@ def imagen_icono_app(tam: int = 1024, sin_margen: bool = False) -> QImage:
     return img
 
 
+def imagen_marca_agua(alto: int) -> QImage:
+    """Arco de la Mezquita solo (sin el cuadrado del icono), en granate, sobre fondo transparente.
+
+    Se usa muy atenuado como fondo del sello de la firma digital, como hace Acrobat con su logotipo.
+    """
+    ancho = int(alto * 0.92)
+    img = QImage(ancho, alto, QImage.Format_ARGB32)
+    img.fill(Qt.transparent)
+    p = QPainter(img)
+    p.setRenderHint(QPainter.Antialiasing)
+    dibujar_arco(p, QRectF(0, 0, ancho, alto), QColor("#8E1B2C"), QColor("#C9475C"), dovelas=13,
+                 color_columna=QColor("#8E1B2C"))
+    p.end()
+    return img
+
+
 def pixmap_logo(tam: int, dpr: float = 2.0) -> QPixmap:
     img = imagen_icono_app(int(tam * dpr * 1.25))
     # El icono tiene margen transparente (estándar de macOS); lo recortamos para el logo.

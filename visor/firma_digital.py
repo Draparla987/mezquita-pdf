@@ -18,7 +18,7 @@ from asn1crypto import pem as pem_armor
 from asn1crypto import x509 as asn1_x509
 from PIL import Image, ImageDraw, ImageFont
 from pyhanko import stamp
-from pyhanko.pdf_utils import images
+from pyhanko.pdf_utils import images, layout
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.sign import fields, signers, timestamps
@@ -53,48 +53,136 @@ def _fuente(candidatas: list[str], tam: int) -> ImageFont.ImageFont:
     return ImageFont.load_default(size=tam)
 
 
+OPACIDAD_MARCA = 0.13  # intensidad del arco de fondo
+
+
+def _marca_agua(alto_px: int) -> Image.Image | None:
+    """El arco de la Mezquita para el fondo del sello (necesita Qt; sin él, el sello va sin marca)."""
+    try:
+        from PySide6.QtCore import QBuffer, QIODevice
+        from PySide6.QtGui import QGuiApplication
+
+        from . import tema
+        if QGuiApplication.instance() is None:
+            return None
+        qimg = tema.imagen_marca_agua(alto_px)
+        buf = QBuffer()
+        buf.open(QIODevice.WriteOnly)
+        qimg.save(buf, "PNG")
+        return Image.open(io.BytesIO(bytes(buf.data()))).convert("RGBA")
+    except Exception:
+        return None
+
+
+def _recortar_trazo(img: Image.Image) -> Image.Image:
+    """Quita el margen transparente (o blanco) de la rúbrica para que ocupe su sitio de verdad."""
+    alfa = img.getchannel("A")
+    caja = alfa.point(lambda a: 255 if a > 24 else 0).getbbox()
+    if caja is None or alfa.getextrema() == (255, 255):  # imagen opaca: recortar el blanco
+        gris = img.convert("L").point(lambda v: 255 if v < 235 else 0)
+        caja = gris.getbbox()
+    return img.crop(caja) if caja else img
+
+
 def componer_sello(
     *, ancho_pt: float, alto_pt: float, titular: str, motivo: str, lugar: str,
-    rubrica_png: bytes | None,
+    rubrica_png: bytes | None, marca: bool = True,
 ) -> Image.Image:
-    """Dibuja la apariencia visible de la firma: rúbrica a la izquierda y datos a la derecha."""
+    """Apariencia visible de la firma, del tamaño exacto del recuadro dibujado.
+
+    Rúbrica a la izquierda (a toda la altura), datos a la derecha con la letra más grande que
+    quepa y, de fondo, el arco de la Mezquita muy suave (como el logotipo de Acrobat).
+    """
     escala = 6  # resolución alta para que se vea nítido al ampliar
     w, h = max(int(ancho_pt * escala), 60), max(int(alto_pt * escala), 30)
+    margen = max(2, int(min(w, h) * 0.05))
     img = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+
+    if marca:
+        arco = _marca_agua(int(h * 0.94))
+        if arco is not None:
+            arco.putalpha(arco.getchannel("A").point(lambda a: int(a * OPACIDAD_MARCA)))
+            img.alpha_composite(arco, ((w - arco.width) // 2, (h - arco.height) // 2))
+
     dibujo = ImageDraw.Draw(img)
-
-    zona_texto_x = 0
-    if rubrica_png:
-        rubrica = Image.open(io.BytesIO(rubrica_png)).convert("RGBA")
-        caja_w, caja_h = int(w * 0.45), h
-        rubrica.thumbnail((caja_w - 2 * escala, caja_h - 2 * escala), Image.LANCZOS)
-        img.alpha_composite(
-            rubrica, ((caja_w - rubrica.width) // 2, (caja_h - rubrica.height) // 2)
-        )
-        zona_texto_x = caja_w + 2 * escala
-        dibujo.line([(caja_w, h * 0.12), (caja_w, h * 0.88)], fill=(120, 120, 120, 255), width=escala // 2)
-
     lineas = [("Firmado digitalmente por:", False), (titular, True),
-              (f"Fecha: {datetime.now().astimezone().strftime('%d/%m/%Y %H:%M:%S %z')}", False)]
+              (f"Fecha: {datetime.now().astimezone().strftime('%d/%m/%Y %H:%M:%S')}", False)]
     if motivo:
         lineas.append((f"Motivo: {motivo}", False))
     if lugar:
         lineas.append((f"Lugar: {lugar}", False))
+    interlinea = 1.18
 
-    disponible_w = w - zona_texto_x - 2 * escala
-    tam = int(h / (len(lineas) * 1.3 + 0.5))
-    while tam > 6:
+    def letra_que_cabe(ancho: float, alto: float) -> int:
+        """La letra más grande con la que todas las líneas caben en ancho × alto."""
+        def cabe(tam: int) -> bool:
+            normal, negrita = _fuente(_FUENTES, tam), _fuente(_FUENTES_NEGRITA, tam)
+            mayor = max(dibujo.textlength(t, font=negrita if b else normal) for t, b in lineas)
+            return mayor <= ancho and tam * interlinea * len(lineas) <= alto
+        bajo, alto_max = 6, max(7, int(alto / len(lineas)))
+        while bajo < alto_max:
+            medio = (bajo + alto_max + 1) // 2
+            if cabe(medio):
+                bajo = medio
+            else:
+                alto_max = medio - 1
+        return bajo
+
+    def escribir(x: float, y: float, ancho: float, tam: int, centrado: bool) -> None:
         normal, negrita = _fuente(_FUENTES, tam), _fuente(_FUENTES_NEGRITA, tam)
-        anchos = [dibujo.textlength(t, font=negrita if b else normal) for t, b in lineas]
-        if max(anchos) <= disponible_w:
-            break
-        tam -= 2
-    interlinea = tam * 1.25
-    y = (h - interlinea * len(lineas)) / 2
-    for texto, es_negrita in lineas:
-        dibujo.text((zona_texto_x + escala, y), texto, fill=(20, 20, 20, 255),
-                    font=negrita if es_negrita else normal)
-        y += interlinea
+        y += tam * (interlinea - 1) / 2
+        for texto, es_negrita in lineas:
+            fuente = negrita if es_negrita else normal
+            dx = (ancho - dibujo.textlength(texto, font=fuente)) / 2 if centrado else 0
+            dibujo.text((x + dx, y), texto, fill=(20, 20, 20, 255), font=fuente)
+            y += tam * interlinea
+
+    if not rubrica_png:
+        tam = letra_que_cabe(w - 2 * margen, h - 2 * margen)
+        escribir(margen, (h - tam * interlinea * len(lineas)) / 2, w - 2 * margen, tam, False)
+        return img
+
+    # Con rúbrica: se prueban dos disposiciones (al lado o encima de los datos) y varios repartos,
+    # y se queda la que hace más grandes a la vez la rúbrica y el texto.
+    rubrica = _recortar_trazo(Image.open(io.BytesIO(rubrica_png)).convert("RGBA"))
+    mejor = None
+    for modo in ("lado", "encima"):
+        for parte in (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65):
+            if modo == "lado":
+                caja_r = (int(w * parte) - margen, h - 2 * margen)
+            else:
+                caja_r = (w - 2 * margen, int(h * parte) - margen)
+            factor = min(caja_r[0] / rubrica.width, caja_r[1] / rubrica.height)
+            rw, rh = rubrica.width * factor, rubrica.height * factor
+            if modo == "lado":
+                texto_w, texto_h = w - (margen + rw + 2 * margen) - margen, h - 2 * margen
+            else:
+                texto_w, texto_h = w - 2 * margen, h - (margen + rh + margen) - margen
+            if texto_w < 20 or texto_h < 20:
+                continue
+            tam = letra_que_cabe(texto_w, texto_h)
+            # Proporción del alto que ocupa cada uno: se busca que el menor sea lo mayor posible
+            puntuacion = min(tam * interlinea * len(lineas) / h, rh / h)
+            if mejor is None or puntuacion > mejor[0]:
+                mejor = (puntuacion, modo, factor, tam)
+    _, modo, factor, tam = mejor
+    rubrica = rubrica.resize((max(1, int(rubrica.width * factor)), max(1, int(rubrica.height * factor))),
+                             Image.LANCZOS)
+    bloque = tam * interlinea * len(lineas)
+    gris, grosor = (150, 150, 150, 255), max(1, escala // 3)
+    if modo == "lado":
+        img.alpha_composite(rubrica, (margen, (h - rubrica.height) // 2))
+        separador = margen + rubrica.width + margen
+        dibujo.line([(separador, h * 0.12), (separador, h * 0.88)], fill=gris, width=grosor)
+        texto_x = separador + margen
+        escribir(texto_x, (h - bloque) / 2, w - texto_x - margen, tam, False)
+    else:
+        hueco = (h - rubrica.height - bloque - 2 * margen) / 3  # reparte el espacio que sobra
+        y = max(margen, hueco + margen / 2)
+        img.alpha_composite(rubrica, ((w - rubrica.width) // 2, int(y)))
+        y += rubrica.height + margen / 2 + hueco / 2
+        dibujo.line([(w * 0.2, y), (w * 0.8, y)], fill=gris, width=grosor)
+        escribir(margen, y + margen / 2, w - 2 * margen, tam, True)
     return img
 
 
@@ -226,6 +314,10 @@ def firmar_pdf(
             background=images.PdfImage(imagen_sello),
             background_opacity=1.0,
             border_width=0,
+            # Sin el margen de 5 pt de pyHanko: el sello ocupa exactamente el recuadro dibujado
+            background_layout=layout.SimpleBoxLayoutRule(
+                x_align=layout.AxisAlignment.ALIGN_MID, y_align=layout.AxisAlignment.ALIGN_MID,
+                margins=layout.Margins(0, 0, 0, 0), inner_content_scaling=layout.InnerScaling.STRETCH_FILL),
         )
     else:
         spec = fields.SigFieldSpec(sig_field_name=nombre_campo)
