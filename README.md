@@ -1,9 +1,14 @@
 # Mezquita PDF
 
-Visor y editor de PDF para **Mac e iPhone**, al estilo de Adobe Reader, con **firma manuscrita**,
+Visor y editor de PDF para **Mac, Windows e iPhone**, al estilo de Adobe Reader, con **firma manuscrita**,
 **firma electrónica con certificado digital** (FNMT, ACCV, Izenpe, Camerfirma…) y opciones
 para **compartir por correo o WhatsApp**. Su imagen (granate y crema, arcos de herradura) se
-inspira en la Mezquita de Córdoba; se adapta automáticamente al modo claro u oscuro del Mac.
+inspira en la Mezquita de Córdoba; se adapta automáticamente al modo claro u oscuro del sistema.
+
+Descargas (siempre la última versión publicada):
+- Mac con chip Apple: https://github.com/Draparla987/mezquita-pdf/releases/latest/download/MezquitaPDF-apple-silicon.dmg
+- Mac con Intel: https://github.com/Draparla987/mezquita-pdf/releases/latest/download/MezquitaPDF-intel.dmg
+- Windows 10 y 11 (64 bits): https://github.com/Draparla987/mezquita-pdf/releases/latest/download/MezquitaPDF-windows.exe
 
 ## Instalar en el Mac
 
@@ -17,12 +22,31 @@ inspira en la Mezquita de Córdoba; se adapta automáticamente al modo claro u o
 Atajo para quien compila en su Mac: `./construir_app.sh --instalar` la copia a Aplicaciones.
 Desde el código sin compilar: `./MezquitaPDF.command`.
 
+## Instalar en Windows
+
+1. Descarga **`MezquitaPDF-windows.exe`** (enlace de arriba) y ábrelo. Si Windows muestra
+   «Windows protegió su PC» (pasa con programas sin firma de editor): **Más información** →
+   **Ejecutar de todas formas**. Solo la primera vez.
+2. Se instala solo para tu usuario, sin pedir permisos de administrador, con acceso en el menú
+   Inicio (y en el escritorio, si lo eliges). Se desinstala desde Configuración → Aplicaciones.
+
+En Windows funciona igual que en el Mac, con estas equivalencias:
+- **Firma con certificado:** usa los certificados del almacén de Windows («Personal»), también
+  los de DNIe y tarjetas; con una tarjeta, Windows pide el PIN. La clave nunca sale del almacén.
+- **Correo:** crea un mensaje con el PDF adjunto en tu programa de correo (Outlook, Thunderbird…).
+- **Atajos:** Ctrl en lugar de ⌘ (Ctrl+Z para deshacer, Ctrl+S para guardar…).
+- **Claude:** *Herramientas → Conectar con Claude…* también funciona con la app de Claude para Windows.
+
 ## Abrir los PDF con Mezquita PDF por defecto
 
 - **Mac:** en la pantalla de inicio de la app aparece «Usar por defecto» (o menú
   *Ayuda → Usar Mezquita PDF como app predeterminada para PDF*). Desde ese momento, el doble
   clic en cualquier PDF lo abre en Mezquita PDF. Alternativa manual: Finder → selecciona un PDF
   → ⌘I → *Abrir con* → Mezquita PDF → **Cambiar todo…**
+- **Windows:** el instalador la registra para los PDF. Con «Usar por defecto» se abre
+  *Configuración → Aplicaciones predeterminadas* en su página: elige **Mezquita PDF** para
+  `.pdf`. Windows no deja que una app se ponga a sí misma como predeterminada. Alternativa: clic
+  derecho sobre un PDF → *Abrir con* → *Elegir otra aplicación* → Mezquita PDF → **Siempre**.
 - **iPhone (iOS 27):** en *Archivos*, mantén pulsado un PDF → **Obtener información** →
   *Abrir siempre con esta aplicación* → **Mezquita PDF** → **Abrir siempre archivos Documento
   PDF**. A partir de ahí, tocar un PDF en Archivos lo abre en la app. También aparece en
@@ -184,6 +208,10 @@ visor/miniaturas.py     Panel de miniaturas (selección, arrastrar y soltar, ⌫
 visor/mcp_servidor.py   Extensión para la app de Claude (MCP por stdio, sin Qt) e instalación
 visor/puente_claude.py  Lo que Claude puede hacer en la app (socket local privado) y su ventana
 visor/actualizaciones.py  Avisos de versión nueva e instalación (GitHub Releases)
+visor/plataforma.py     Diferencias Mac / Windows (atajos, nombres, carpetas)
+visor/almacen_windows.py  Firma con el almacén de certificados de Windows (CNG / CryptoAPI)
+visor/instancia.py      Una sola copia de la app en Windows (le pasa los PDF a la abierta)
+recursos/instalador_windows.iss  Instalador de Windows (Inno Setup)
 MezquitaPDF.spec        Configuración para crear la .app (PyInstaller)
 pruebas/                Prueba de extremo a extremo (también se ejecuta en GitHub)
 .github/workflows/      Compilación automática de los .dmg

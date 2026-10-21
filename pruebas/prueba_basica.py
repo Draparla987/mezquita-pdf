@@ -99,8 +99,12 @@ publicada = {"tag_name": "v9.0.0", "body": "Instaladores\n## Novedades\n- x", "h
     {"name": "MezquitaPDF-apple-silicon.dmg", "browser_download_url": "https://a", "size": 2, "digest": "sha256:BB"}]}
 nueva = act.interpretar(publicada, "MezquitaPDF-intel.dmg")
 assert (nueva.numero, nueva.url, nueva.sha256, nueva.notas) == ("9.0.0", "https://i", "aa", "## Novedades\n- x")
-guion = act.guion_sustitucion(1, Path("/A/Mezquita PDF.app"), Path("/N/Mezquita PDF.app"), Path("/C/anterior.app"), False)
-assert "mv '/A/Mezquita PDF.app' /C/anterior.app" in guion and "open" not in guion.split("fi\n")[-1]
+if sys.platform == "win32":
+    guion = act.guion_windows(1, Path(r"C:\N\MezquitaPDF-windows.exe"), Path(r"C:\A\Mezquita PDF.exe"), True)
+    assert "Wait-Process -Id 1" in guion and "'/VERYSILENT'" in guion and guion.endswith(r"'C:\A\Mezquita PDF.exe'")
+else:
+    guion = act.guion_sustitucion(1, Path("/A/Mezquita PDF.app"), Path("/N/Mezquita PDF.app"), Path("/C/anterior.app"), False)
+    assert "mv '/A/Mezquita PDF.app' /C/anterior.app" in guion and "open" not in guion.split("fi\n")[-1]
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("✅ Prueba básica superada")
