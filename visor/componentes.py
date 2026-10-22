@@ -75,13 +75,21 @@ def contenido_desplazable(dialogo: QDialog, capa: QVBoxLayout, fijos_al_final: i
     zona.setStyleSheet("QScrollArea#zonaDesplazable, QWidget#contenidoDesplazable { background: transparent; }")
     zona.setMinimumHeight(140)
     capa.insertWidget(0, zona, 1)
+    ajustar_a_contenido(dialogo, zona)
+    return zona
 
+
+def ajustar_a_contenido(dialogo: QDialog, zona: QScrollArea) -> None:
+    """Alto justo para que se vea todo el contenido de `zona`… si cabe en la pantalla."""
+    capa = dialogo.layout()
+    capa.activate()  # que el tamaño mínimo sea ya el nuevo (con la zona desplazable)
     m = capa.contentsMargins()
     fijos = sum(capa.itemAt(i).sizeHint().height() for i in range(1, capa.count()))
-    deseado = contenedor.sizeHint().height() + fijos + capa.spacing() * (capa.count() - 1) + m.top() + m.bottom()
-    ancho = max(dialogo.minimumWidth(), contenedor.sizeHint().width() + m.left() + m.right() + 16)
+    deseado = (zona.widget().sizeHint().height() + fijos + capa.spacing() * (capa.count() - 1)
+               + m.top() + m.bottom())
+    ancho = max(dialogo.width() if dialogo.isVisible() else 0, dialogo.minimumWidth(),
+                zona.widget().sizeHint().width() + m.left() + m.right() + 16)
     encajar_en_pantalla(dialogo, ancho, deseado)
-    return zona
 
 
 def separador_vertical(alto: int = 22) -> QFrame:

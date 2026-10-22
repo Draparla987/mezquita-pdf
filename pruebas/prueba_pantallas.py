@@ -26,12 +26,12 @@ os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={pantalla}"
 
 from PySide6.QtGui import QImage  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
+from PySide6.QtWidgets import QApplication, QPushButton, QScrollArea  # noqa: E402
 
 app = QApplication([])
 app.setOrganizationName("MezquitaPDFPruebas")
 
-from visor import actualizaciones, tema  # noqa: E402
+from visor import actualizaciones, llavero, tema  # noqa: E402
 from visor import firma_digital as fd  # noqa: E402
 from visor.combinar import DialogoCombinar  # noqa: E402
 from visor.componentes import DialogoWhatsApp  # noqa: E402
@@ -43,6 +43,9 @@ from visor.puente_claude import DialogoClaude  # noqa: E402
 from visor.ventana import VentanaPrincipal  # noqa: E402
 
 tema.aplicar_tema(app, False)
+# Igual en todos los equipos (y sin leer el Llavero de nadie): como si no hubiera certificados, que
+# además es el caso más alto de la ventana de firma (muestra el apartado del archivo .p12)
+llavero.listar_certificados = lambda *a, **k: []
 area = app.primaryScreen().availableGeometry()
 assert (area.width(), area.height()) == (1093, 566), area
 ejemplo = str(RAIZ / "ejemplos" / "ejemplo.pdf")
@@ -55,10 +58,18 @@ firmado = fd.firmar_pdf(Path(ejemplo).read_bytes(), fd.cargar_certificado(
 fallos = []
 
 
+def _antecesores(widget):
+    while widget is not None:
+        widget = widget.parentWidget()
+        yield widget
+
+
 def revisar(nombre: str, ventana) -> None:
     ventana.show()
     QTest.qWait(120)
-    botones = [b for b in ventana.findChildren(QPushButton) if b.isVisible() and b.window() is ventana]
+    # Botones fijos (los de dentro de una zona con desplazamiento se alcanzan desplazando)
+    botones = [b for b in ventana.findChildren(QPushButton) if b.isVisible() and b.window() is ventana
+               and not any(isinstance(p, QScrollArea) for p in _antecesores(b))]
     abajo = max((b.mapTo(ventana, b.rect().bottomLeft()).y() for b in botones), default=0)
     cabe = ventana.height() + 30 <= area.height() and ventana.width() <= area.width() and abajo <= ventana.height()
     print(f"  {'✔' if cabe else '✘'} {nombre}: {ventana.width()}×{ventana.height()}", flush=True)

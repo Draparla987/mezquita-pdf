@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from . import firma_digital as fd
 from . import llavero, tema
-from .componentes import contenido_desplazable
+from .componentes import ajustar_a_contenido, contenido_desplazable
 from .plataforma import ES_WINDOWS, NOMBRE_ALMACEN
 
 
@@ -635,12 +635,13 @@ class DialogoFirmaDigital(QDialog):
         botones.accepted.connect(self._aceptar)
         botones.rejected.connect(self.reject)
         capa.addWidget(botones)
-        # En portátiles no cabe entera: el contenido se desplaza y los botones quedan siempre a la vista
-        contenido_desplazable(self, capa)
 
         self._cargar_lista()
         if self.ajustes.value("firma/modo", "llavero") == "archivo" or not self._certificados:
             self.boton_archivo.setChecked(True)
+        # En portátiles no cabe entera: el contenido se desplaza y los botones quedan siempre a la
+        # vista. Se calcula al final, con lo que de verdad se va a mostrar (lista o archivo .p12).
+        self._zona = contenido_desplazable(self, capa)
 
     # --- Lista de certificados del sistema --------------------------------
     def _cargar_lista(self) -> None:
@@ -697,7 +698,8 @@ class DialogoFirmaDigital(QDialog):
             self.lista.clearSelection()
             self.campo_pass.setFocus()
         self._actualizar_boton()
-        self.adjustSize()
+        if getattr(self, "_zona", None) is not None:  # crece lo que deje la pantalla
+            ajustar_a_contenido(self, self._zona)
 
     def _actualizar_boton(self) -> None:
         if self.boton_archivo.isChecked():
