@@ -13,10 +13,11 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout,
-    QLabel, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QLabel, QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 from . import compartir, tema
+from .plataforma import ES_MAC, teclas
 
 
 def sombra(widget: QWidget, radio: int = 24, desplazamiento: int = 4, alfa: int = 40) -> None:
@@ -25,6 +26,62 @@ def sombra(widget: QWidget, radio: int = 24, desplazamiento: int = 4, alfa: int 
     efecto.setOffset(0, desplazamiento)
     efecto.setColor(QColor(0, 0, 0, alfa))
     widget.setGraphicsEffect(efecto)
+
+
+# ----------------------------------------------------------------------------
+# Pantallas pequeñas (portátiles, sobre todo en Windows con el zoom al 125–150 %)
+# ----------------------------------------------------------------------------
+MARGEN_VENTANA = 56  # barra de título y un poco de aire
+
+
+def area_disponible(widget: QWidget):
+    """Espacio libre de la pantalla donde está (o estará) la ventana, sin la barra de tareas."""
+    from PySide6.QtGui import QGuiApplication
+    referencia = widget.parentWidget().window() if widget.parentWidget() else widget
+    pantalla = referencia.screen() or QGuiApplication.primaryScreen()
+    return pantalla.availableGeometry()
+
+
+def encajar_en_pantalla(widget: QWidget, ancho: int, alto: int) -> None:
+    """Tamaño inicial `ancho`×`alto`, pero sin pasar del espacio libre de la pantalla."""
+    area = area_disponible(widget)
+    widget.resize(max(widget.minimumWidth(), min(ancho, area.width() - 24)),
+                  max(widget.minimumHeight(), min(alto, area.height() - MARGEN_VENTANA)))
+
+
+def contenido_desplazable(dialogo: QDialog, capa: QVBoxLayout, fijos_al_final: int = 1) -> QScrollArea:
+    """Mete en una zona con barra de desplazamiento todo lo que hay en `capa` salvo los últimos
+    `fijos_al_final` elementos (los botones, que quedan siempre a la vista) y ajusta el diálogo a
+    la pantalla: si cabe entero se ve igual que antes; si no, aparece la barra."""
+    contenedor = QWidget()
+    contenedor.setObjectName("contenidoDesplazable")
+    interior = QVBoxLayout(contenedor)
+    interior.setContentsMargins(0, 0, 4, 0)
+    interior.setSpacing(capa.spacing())
+    for _ in range(capa.count() - fijos_al_final):
+        item = capa.takeAt(0)
+        if item.widget() is not None:
+            interior.addWidget(item.widget())
+        elif item.layout() is not None:
+            interior.addLayout(item.layout())
+        else:
+            interior.addItem(item)
+    zona = QScrollArea()
+    zona.setObjectName("zonaDesplazable")
+    zona.setWidget(contenedor)
+    zona.setWidgetResizable(True)
+    zona.setFrameShape(QFrame.NoFrame)
+    zona.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    zona.setStyleSheet("QScrollArea#zonaDesplazable, QWidget#contenidoDesplazable { background: transparent; }")
+    zona.setMinimumHeight(140)
+    capa.insertWidget(0, zona, 1)
+
+    m = capa.contentsMargins()
+    fijos = sum(capa.itemAt(i).sizeHint().height() for i in range(1, capa.count()))
+    deseado = contenedor.sizeHint().height() + fijos + capa.spacing() * (capa.count() - 1) + m.top() + m.bottom()
+    ancho = max(dialogo.minimumWidth(), contenedor.sizeHint().width() + m.left() + m.right() + 16)
+    encajar_en_pantalla(dialogo, ancho, deseado)
+    return zona
 
 
 def separador_vertical(alto: int = 22) -> QFrame:

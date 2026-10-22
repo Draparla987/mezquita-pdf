@@ -33,6 +33,14 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python pruebas/prueba_basica.py
 
+      - name: Revisar el código (nombres sin definir)
+        run: |
+          pip install pyflakes
+          python pruebas/revisar_codigo.py
+
+      - name: Todas las ventanas caben en la pantalla de un portátil
+        run: python pruebas/prueba_pantallas.py
+
       - name: Certificados de prueba en el almacén de Windows
         shell: pwsh
         run: |

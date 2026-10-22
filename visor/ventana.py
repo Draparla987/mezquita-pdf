@@ -21,8 +21,8 @@ from . import compartir, sistema, tema
 from . import firma_digital as fd
 from .combinar import FILTRO as FILTRO_INSERTAR, DialogoCombinar, abrir_archivo
 from .componentes import (
-    BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
-    separador_vertical,
+    MARGEN_VENTANA, BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
+    area_disponible, encajar_en_pantalla, separador_vertical,
 )
 from .dialogos import (
     DialogoContrasena, DialogoFirmaDigital, DialogoFirmas, DialogoTexto, DialogoVerificacion,
@@ -186,8 +186,8 @@ class VentanaPrincipal(QMainWindow):
         self.documento: Documento | None = None
         self.tenia_firmas = False
         self.firma_actual: Path | None = None
-        self.resize(1320, 880)
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(720, 440)
+        encajar_en_pantalla(self, 1320, 880)  # en un portátil, lo que quepa
         self.setAcceptDrops(True)
 
         self.vista = VistaPDF()
@@ -199,6 +199,10 @@ class VentanaPrincipal(QMainWindow):
         self._conectar_vista()
         self._actualizar_estado_ui()
         self.restoreGeometry(self.ajustes.value("ventana/geometria", b""))
+        area = area_disponible(self)  # p. ej. venía de un monitor grande y ahora está en el portátil
+        if not self.isMaximized() and (self.height() > area.height() - MARGEN_VENTANA or self.width() > area.width()):
+            encajar_en_pantalla(self, self.width(), self.height())
+            self.move(max(area.left(), min(self.x(), area.right() - self.width())), area.top())
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self._escape)
 
     # ------------------------------------------------------------------

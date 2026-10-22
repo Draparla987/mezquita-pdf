@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from . import firma_digital as fd
 from . import llavero, tema
+from .componentes import contenido_desplazable
 from .plataforma import ES_WINDOWS, NOMBRE_ALMACEN
 
 
@@ -634,6 +635,8 @@ class DialogoFirmaDigital(QDialog):
         botones.accepted.connect(self._aceptar)
         botones.rejected.connect(self.reject)
         capa.addWidget(botones)
+        # En portátiles no cabe entera: el contenido se desplaza y los botones quedan siempre a la vista
+        contenido_desplazable(self, capa)
 
         self._cargar_lista()
         if self.ajustes.value("firma/modo", "llavero") == "archivo" or not self._certificados:

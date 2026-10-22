@@ -277,7 +277,7 @@ class DialogoCombinar(QDialog):
     def __init__(self, parent=None, actual: Documento | None = None):
         super().__init__(parent)
         self.setWindowTitle("Combinar documentos")
-        self.setMinimumSize(660, 580)
+        self.setMinimumSize(560, 400)
         self.setAcceptDrops(True)
         self.ajustes = QSettings()
         self.resultado: Documento | None = None
@@ -401,6 +401,8 @@ class DialogoCombinar(QDialog):
             self._añadir_parte(Parte(actual.nombre, doc, ruta=actual.ruta, origen="abierto",
                                      firmado=doc.get_sigflags() > 0))
         self._actualizar()
+        from .componentes import encajar_en_pantalla
+        encajar_en_pantalla(self, 700, 600)
 
     # --- Partes -------------------------------------------------------------
     def parte_de_indice(self, idx: QModelIndex) -> Parte | None:

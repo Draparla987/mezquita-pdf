@@ -36,7 +36,7 @@ def migrar_ajustes() -> None:
     nuevos.setValue("migrado", True)
 
 
-def traduccion_qt() -> "QTranslator | None":
+def traduccion_qt():  # → QTranslator o None
     """Textos propios de Qt y del Mac en español: menú de la app («Ocultar», «Salir»…) y botones
     estándar («Guardar», «No guardar», «Cancelar»…). La app entera está en español."""
     from pathlib import Path

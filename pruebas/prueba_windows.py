@@ -124,9 +124,11 @@ from visor.dialogos import DialogoFirmaDigital  # noqa: E402
 esperar(lambda: False, 1.5)  # que se pinten las páginas
 v.grab().save(str(CAPTURAS / "ventana.png"))
 dlg = DialogoFirmaDigital(v)
-dlg.resize(640, 760)
 dlg.show()
 esperar(lambda: False, 0.5)
+disponible = dlg.screen().availableGeometry()
+assert dlg.frameGeometry().height() <= disponible.height(), (dlg.frameGeometry(), disponible)
+ok(f"la ventana de firma cabe en la pantalla ({dlg.width()}×{dlg.height()} de {disponible.width()}×{disponible.height()})")
 dlg.grab().save(str(CAPTURAS / "certificados.png"))
 dlg.close()
 v.documento.modificado = False
