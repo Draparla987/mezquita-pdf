@@ -67,9 +67,9 @@ En Windows funciona igual que en el Mac, con estas equivalencias:
 |---|---|---|
 | Desplazamiento continuo, zoom (⌘+ / ⌘−, pellizco en el trackpad), ajustar al ancho o a la página | Resaltar, subrayar y tachar texto | Firma manuscrita: dibujada, escrita con letra caligráfica o desde una foto (se quita el fondo) |
 | Miniaturas como en Vista Previa: ↑ ↓ para cambiar de página, ⌫ para borrar, arrastrar para reordenar (también varias con ⌘/⇧) y soltar PDF o imágenes para insertarlos; marcadores | Añadir texto, notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
-| Búsqueda (⌘F, Intro = siguiente) | **Editar texto existente** (clic en una línea) | Sello de tiempo de una TSA (opcional) |
+| Búsqueda (⌘F, Intro = siguiente) | **Editar y mover texto existente** (clic en una línea para cambiarla; arrástrala, o varias con un recuadro, para moverla; flechas para ajustar) | Sello de tiempo de una TSA (opcional) |
 | Seleccionar y copiar texto | **Borrar zona** (elimina de verdad el contenido) | Verificación de firmas, con un aviso verde/rojo al abrir el documento |
-| Rellenar formularios y seguir enlaces | Insertar imágenes, borrar anotaciones (doble clic sobre un texto añadido para editarlo) | Certificar el documento (bloquea cambios) |
+| Rellenar formularios y seguir enlaces | Insertar imágenes; **mover y redimensionar** lo añadido con *Seleccionar* (arrastrar, esquinas, flechas, ⌫ para borrar); doble clic sobre un texto añadido para editarlo | Certificar el documento (bloquea cambios) |
 | Documentos con contraseña | Girar, insertar, eliminar, mover y extraer páginas | |
 | | **Combinar documentos**: varios PDF (y fotos o escaneos) en uno nuevo, en el orden y con las páginas que elijas | |
 | Imprimir (⌘P) | Deshacer/rehacer (⌘Z / ⇧⌘Z) | |
@@ -213,6 +213,7 @@ visor/tema.py           Paleta, estilos, iconos y logotipo (arco de la Mezquita)
 visor/componentes.py    Bienvenida, avisos, barras flotantes, diálogo de WhatsApp
 visor/combinar.py       Combinar documentos (diálogo y lógica)
 visor/miniaturas.py     Panel de miniaturas (selección, arrastrar y soltar, ⌫)
+visor/mover.py          Mover texto original y anotaciones (sin interfaz)
 visor/mcp_servidor.py   Extensión para la app de Claude (MCP por stdio, sin Qt) e instalación
 visor/puente_claude.py  Lo que Claude puede hacer en la app (socket local privado) y su ventana
 visor/actualizaciones.py  Avisos de versión nueva e instalación (GitHub Releases)

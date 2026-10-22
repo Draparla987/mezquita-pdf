@@ -41,6 +41,11 @@ jobs:
       - name: Todas las ventanas caben en la pantalla de un portátil
         run: python pruebas/prueba_pantallas.py
 
+      - name: Mover texto y anotaciones (ratón y teclado)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python pruebas/prueba_mover.py
+
       - name: Certificados de prueba en el almacén de Windows
         shell: pwsh
         run: |

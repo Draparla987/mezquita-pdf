@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from . import compartir, sistema, tema
+from . import compartir, mover, sistema, tema
 from . import firma_digital as fd
 from .combinar import FILTRO as FILTRO_INSERTAR, DialogoCombinar, abrir_archivo
 from .componentes import (
@@ -41,7 +41,7 @@ COLORES_TRAZO = ["#8E1B2C", "#E03131", "#1C7ED6", "#2F9E44", "#212529"]
 
 # herramienta → (texto corto, icono, consejo, atajo)
 DEF_HERRAMIENTAS = {
-    Herramienta.SELECCIONAR: ("Seleccionar", "cursor-text", "Selecciona y copia texto; rellena formularios y sigue enlaces", "V"),
+    Herramienta.SELECCIONAR: ("Seleccionar", "cursor-text", "Selecciona y copia texto; rellena formularios, sigue enlaces y mueve lo que hayas añadido", "V"),
     Herramienta.MANO: ("Mano", "hand-back-right-outline", "Desplazar el documento arrastrando", "H"),
     Herramienta.RESALTAR: ("Resaltar", "marker", "Resaltar texto", "Ctrl+Shift+H"),
     Herramienta.SUBRAYAR: ("Subrayar", "format-underline", "Subrayar texto", "Ctrl+Shift+U"),
@@ -52,7 +52,7 @@ DEF_HERRAMIENTAS = {
     Herramienta.RECTANGULO: ("Rectángulo", "rectangle-outline", "Dibujar un rectángulo", "R"),
     Herramienta.ELIPSE: ("Elipse", "ellipse-outline", "Dibujar una elipse", "O"),
     Herramienta.FLECHA: ("Flecha", "arrow-top-right", "Dibujar una flecha", "A"),
-    Herramienta.EDITAR_TEXTO: ("Editar texto", "text-box-edit-outline", "Cambiar el texto existente del PDF", "E"),
+    Herramienta.EDITAR_TEXTO: ("Editar texto", "text-box-edit-outline", "Cambiar o mover el texto existente del PDF", "E"),
     Herramienta.TAPAR: ("Borrar zona", "selection-remove", "Eliminar de verdad el contenido de una zona", None),
     Herramienta.IMAGEN: ("Imagen", "image-outline", "Insertar una imagen", "I"),
     Herramienta.FIRMA: ("Firma manuscrita", "signature-freehand", "Colocar tu firma manuscrita", "F"),
@@ -81,7 +81,7 @@ PISTAS = {
     Herramienta.RECTANGULO: "Arrastra para dibujar",
     Herramienta.ELIPSE: "Arrastra para dibujar",
     Herramienta.FLECHA: "Arrastra para dibujar",
-    Herramienta.EDITAR_TEXTO: "Haz clic en la línea de texto que quieras cambiar",
+    Herramienta.EDITAR_TEXTO: "Clic en una línea para cambiarla · arrástrala para moverla · rodea varias con un recuadro",
     Herramienta.TAPAR: "Arrastra para borrar todo lo que haya en la zona",
     Herramienta.IMAGEN: "Haz clic o arrastra para colocar la imagen",
     Herramienta.FIRMA: "Haz clic donde quieras firmar (o arrastra para elegir el tamaño)",
@@ -1558,16 +1558,10 @@ class VentanaPrincipal(QMainWindow):
         self.vista._modificado(indice)
 
     def _editar_linea(self, indice: int, linea: dict) -> None:
-        flags = linea["flags"]
-        nombre = linea["fuente"].lower()
-        if flags & 8 or "courier" in nombre or "mono" in nombre:
-            familia = "Courier"
-        elif flags & 4 or "times" in nombre or "serif" in nombre and "sans" not in nombre:
-            familia = "Times"
-        else:
-            familia = "Helvetica"
-        negrita = bool(flags & 16) or "bold" in nombre
-        cursiva = bool(flags & 2) or "italic" in nombre or "oblique" in nombre
+        estandar = mover.fuente_estandar(linea["fuente"], linea["flags"])
+        familia = {"he": "Helvetica", "ti": "Times", "co": "Courier"}[estandar[:2]]
+        negrita = estandar.endswith(("bo", "bi"))
+        cursiva = estandar.endswith(("it", "bi"))
         c = linea["color"]
         color = QColor((c >> 16) & 255, (c >> 8) & 255, c & 255)
         dlg = DialogoTexto(self, "Editar texto del PDF", texto=linea["texto"],
@@ -1593,10 +1587,8 @@ class VentanaPrincipal(QMainWindow):
         pagina.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                                 graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
         dx, dy = linea["dir"]
-        import math
         angulo = round(math.degrees(math.atan2(-dy, dx)))
-        pagina.insert_text(linea["origen"], dlg.texto, fontname=fuente, fontsize=dlg.tamano,
-                           color=a_rgb(dlg.color), rotate=angulo if angulo in (0, 90, 180, 270, -90) else 0)
+        mover.escribir(pagina, linea["origen"], dlg.texto, fuente, dlg.tamano, a_rgb(dlg.color), angulo)
         self.vista._modificado(indice)
 
     # ------------------------------------------------------------------

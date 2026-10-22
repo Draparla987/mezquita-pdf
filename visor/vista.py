@@ -6,7 +6,7 @@ from collections import OrderedDict
 from enum import Enum, auto
 
 import pymupdf
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QBrush, QColor, QCursor, QImage, QPainter, QPainterPath, QPen, QPixmap,
 )
@@ -14,8 +14,13 @@ from PySide6.QtWidgets import (
     QApplication, QFrame, QMenu, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from . import tema
+from . import mover, tema
 from .documento import Documento
+from .mover import tamano_real
+from .plataforma import teclas
+
+FLECHAS = {Qt.Key_Left: (-1, 0), Qt.Key_Right: (1, 0), Qt.Key_Up: (0, -1), Qt.Key_Down: (0, 1)}
+TAM_ASA = 9  # px: esquinas para cambiar el tamaño de una anotación
 
 MARGEN = 24
 MARGEN_INFERIOR = 84  # deja sitio a la barra flotante de navegación
@@ -182,6 +187,10 @@ class VistaPDF(QScrollArea):
         self._hover_linea: tuple[int, pymupdf.Rect] | None = None
         self._hover_anot: tuple[int, pymupdf.Rect] | None = None
         self._arrastre_mano: QPoint | None = None
+        # Mover texto original (Editar texto) y anotaciones (Seleccionar)
+        self._lineas_sel: tuple[int, list[dict]] | None = None
+        self._anot_sel: tuple[int, int] | None = None  # (página, xref)
+        self._arrastre: dict | None = None
 
         # Búsqueda
         self.resultados: list[tuple[int, pymupdf.Rect]] = []
@@ -222,6 +231,7 @@ class VistaPDF(QScrollArea):
         self._seleccion = None
         self._hover_linea = None
         self._hover_anot = None
+        self._lineas_sel = self._anot_sel = self._arrastre = None
         for w in self.paginas:
             self.capa.removeWidget(w)
             w.deleteLater()
@@ -361,6 +371,10 @@ class VistaPDF(QScrollArea):
         super().wheelEvent(ev)
 
     def event(self, ev):
+        if (ev.type() == QEvent.ShortcutOverride and self._hay_seleccion_movil()
+                and ev.key() in (*FLECHAS, Qt.Key_Escape, Qt.Key_Delete, Qt.Key_Backspace)):
+            ev.accept()
+            return True
         # Gesto de pellizco en el trackpad del Mac
         if ev.type() == ev.Type.NativeGesture:
             if ev.gestureType() == Qt.ZoomNativeGesture:
@@ -376,6 +390,7 @@ class VistaPDF(QScrollArea):
         self._seleccion = None
         self._hover_linea = None
         self._hover_anot = None
+        self._lineas_sel = self._anot_sel = self._arrastre = None
         cursores = {
             Herramienta.MANO: Qt.OpenHandCursor,
             Herramienta.SELECCIONAR: Qt.IBeamCursor,
@@ -421,7 +436,20 @@ class VistaPDF(QScrollArea):
                         "fuente": spans[0]["font"],
                         "flags": spans[0]["flags"],
                         "dir": linea.get("dir", (1, 0)),
+                        # Cada fragmento con su formato, para moverlo sin perder negritas, colores…
+                        "spans": [{"texto": s["text"], "origen": pymupdf.Point(s["origin"]), "tamano": tamano_real(s),
+                                   "color": s["color"], "fuente": s["font"], "flags": s["flags"],
+                                   "ancho": s["bbox"][2] - s["bbox"][0]} for s in spans],
                     })
+            # El texto de las anotaciones (cuadros de texto, sellos) y de los campos de formulario
+            # sale en la extracción, pero no es texto de la página: no se edita ni se mueve aquí
+            pagina = self.documento.pagina(indice)
+            zonas = [pymupdf.Rect(a.rect) for a in pagina.annots()
+                     if a.type[0] in (pymupdf.PDF_ANNOT_FREE_TEXT, pymupdf.PDF_ANNOT_STAMP)]
+            zonas += [pymupdf.Rect(w.rect) for w in pagina.widgets()]
+            if zonas:
+                lineas = [l for l in lineas if not any(z.contains(
+                    pymupdf.Point((l["rect"].x0 + l["rect"].x1) / 2, (l["rect"].y0 + l["rect"].y1) / 2)) for z in zonas)]
             self._lineas[indice] = lineas
         return self._lineas[indice]
 
@@ -483,6 +511,134 @@ class VistaPDF(QScrollArea):
                 return enlace
         return None
 
+    # --- Mover texto original y anotaciones ------------------------------
+    def _linea_en(self, indice: int, p: pymupdf.Point) -> dict | None:
+        return next((l for l in self._lineas_de(indice) if l["rect"].contains(p)), None)
+
+    def _anotacion_sel(self):
+        if self._anot_sel is None or self.documento is None:
+            return None
+        indice, xref = self._anot_sel
+        try:
+            return self.documento.pagina(indice).load_annot(xref)
+        except Exception:
+            return None
+
+    def _asas(self, w: PaginaWidget, rect: pymupdf.Rect) -> dict[str, QRectF]:
+        """Esquinas (en pantalla) para cambiar el tamaño de la anotación seleccionada."""
+        r = w.a_pantalla(rect)
+        t = TAM_ASA
+        esquinas = {"tl": r.topLeft(), "tr": r.topRight(), "bl": r.bottomLeft(), "br": r.bottomRight()}
+        return {n: QRectF(q.x() - t / 2, q.y() - t / 2, t, t) for n, q in esquinas.items()}
+
+    def _asa_en(self, w: PaginaWidget, pos: QPointF) -> str | None:
+        if self.herramienta != Herramienta.SELECCIONAR or not self._anot_sel or self._anot_sel[0] != w.indice:
+            return None
+        annot = self._anotacion_sel()
+        if not mover.es_redimensionable(annot):
+            return None
+        return next((n for n, r in self._asas(w, annot.rect).items() if r.adjusted(-3, -3, 3, 3).contains(pos)), None)
+
+    def _rect_redimensionado(self, w: PaginaWidget, a: dict) -> pymupdf.Rect | None:
+        annot = self._anotacion_sel()
+        if annot is None or "actual" not in a:
+            return None
+        r = w.a_pantalla(annot.rect)
+        opuesta = {"tl": r.bottomRight(), "tr": r.bottomLeft(), "bl": r.topRight(), "br": r.topLeft()}[a["asa"]]
+        nuevo = pymupdf.Rect(w.a_pdf(opuesta), w.a_pdf(a["actual"]))
+        nuevo.normalize()
+        return nuevo
+
+    def _actualizar_arrastre(self, w: PaginaWidget, pos: QPointF) -> None:
+        a = self._arrastre
+        a["actual"] = pos
+        if a["tipo"] in ("lineas", "anot"):
+            d = w.a_pdf(pos) - w.a_pdf(self._inicio)
+            a["d"] = (d.x, d.y)
+        elif a["tipo"] == "banda":  # se ven las líneas que va abarcando el recuadro
+            zona = pymupdf.Rect(w.a_pdf(self._inicio), w.a_pdf(pos))
+            zona.normalize()
+            dentro = [l for l in self._lineas_de(w.indice) if l["rect"].intersects(zona)]
+            self._lineas_sel = (w.indice, dentro) if dentro else None
+        w.update()
+
+    def _terminar_arrastre(self, w: PaginaWidget, inicio: QPointF, fin: QPointF, es_click: bool) -> None:
+        a, self._arrastre = self._arrastre, None
+        tipo = a["tipo"]
+        if tipo == "lineas":
+            if es_click:  # un clic en una línea: cambiar su texto, como siempre
+                self._lineas_sel = (w.indice, [a["linea"]])
+                self.pedir_editar_texto.emit(w.indice, a["linea"])
+            else:
+                self._mover_lineas_sel(*a.get("d", (0, 0)))
+        elif tipo == "anot":
+            if not es_click:
+                self._mover_anot_sel(*a.get("d", (0, 0)))
+        elif tipo == "asa":
+            nuevo = None if es_click else self._rect_redimensionado(w, a)
+            if nuevo is not None:
+                indice, xref = self._anot_sel
+                self.documento.instantanea()
+                self._anot_sel = (indice, mover.redimensionar_anotacion(self.documento.pagina(indice), xref, nuevo))
+                self._modificado(indice)
+        elif tipo == "banda" and self._lineas_sel:
+            n = len(self._lineas_sel[1])
+            self.mensaje.emit(teclas(f"{n} línea{'s' if n != 1 else ''} seleccionada{'s' if n != 1 else ''}: "
+                                     "arrástralas para moverlas o usa las flechas (⇧ para ir de 10 en 10)"))
+
+    def _mover_lineas_sel(self, dx: float, dy: float) -> None:
+        if not self._lineas_sel or abs(dx) + abs(dy) < 0.01:
+            return
+        indice, lineas = self._lineas_sel
+        self.documento.instantanea()
+        destinos = mover.mover_lineas(self.documento.pagina(indice), lineas, dx, dy)
+        self._modificado(indice)
+        # Siguen seleccionadas en su sitio nuevo (para ajustarlas con las flechas)
+        def solapa(r: pymupdf.Rect, d: pymupdf.Rect) -> bool:
+            comun = r & d
+            return not comun.is_empty and comun.get_area() >= 0.4 * min(r.get_area(), d.get_area())
+        nuevas = [l for l in self._lineas_de(indice) if any(solapa(l["rect"], d) for d in destinos)]
+        self._lineas_sel = (indice, nuevas) if nuevas else None
+        self.mensaje.emit(teclas("Texto movido · ⌘Z para deshacer · flechas para ajustarlo"))
+
+    def _mover_anot_sel(self, dx: float, dy: float) -> None:
+        if not self._anot_sel or abs(dx) + abs(dy) < 0.01:
+            return
+        indice, xref = self._anot_sel
+        self.documento.instantanea()
+        self._anot_sel = (indice, mover.mover_anotacion(self.documento.pagina(indice), xref, dx, dy))
+        self._modificado(indice)
+
+    def _hay_seleccion_movil(self) -> bool:
+        return ((self.herramienta == Herramienta.EDITAR_TEXTO and bool(self._lineas_sel))
+                or (self.herramienta == Herramienta.SELECCIONAR and self._anot_sel is not None))
+
+    def keyPressEvent(self, ev) -> None:
+        if self._hay_seleccion_movil() and self.documento is not None:
+            k = ev.key()
+            if k in FLECHAS:  # ajuste fino: 1 pt (⇧: 10 pt), en la dirección que se ve en pantalla
+                paso = 10 if ev.modifiers() & Qt.ShiftModifier else 1
+                indice = self._lineas_sel[0] if self._lineas_sel else self._anot_sel[0]
+                m = self.documento.pagina(indice).derotation_matrix
+                v = pymupdf.Point(FLECHAS[k][0] * paso, FLECHAS[k][1] * paso) * m - pymupdf.Point(0, 0) * m
+                if self.herramienta == Herramienta.EDITAR_TEXTO:
+                    self._mover_lineas_sel(v.x, v.y)
+                else:
+                    self._mover_anot_sel(v.x, v.y)
+                return
+            if k == Qt.Key_Escape:
+                self._lineas_sel = self._anot_sel = None
+                self.viewport().update()
+                for w in self.paginas:
+                    w.update()
+                return
+            if k in (Qt.Key_Delete, Qt.Key_Backspace) and self._anot_sel is not None:
+                indice, xref = self._anot_sel
+                self._anot_sel = None
+                self.eliminar_anotacion(indice, xref)
+                return
+        super().keyPressEvent(ev)
+
     # --- Eventos de ratón ------------------------------------------------
     def raton_pulsado(self, w: PaginaWidget, ev) -> None:
         if ev.button() != Qt.LeftButton or self.documento is None:
@@ -508,6 +664,33 @@ class VistaPDF(QScrollArea):
                 self._seguir_enlace(enlace)
                 return
             self._seleccion = None
+            # Lo añadido (cuadros de texto, notas, formas…) se mueve arrastrándolo
+            asa = self._asa_en(w, pos)
+            annot = None if asa else self._anotacion_en(w.indice, p)
+            if asa is not None:
+                self._arrastre = {"tipo": "asa", "indice": w.indice, "asa": asa}
+            elif mover.es_movible(annot):
+                self._anot_sel = (w.indice, annot.xref)
+                self._arrastre = {"tipo": "anot", "indice": w.indice, "rect": pymupdf.Rect(annot.rect)}
+            else:
+                self._anot_sel = None
+            if self._arrastre is not None:
+                self.setFocus(Qt.MouseFocusReason)  # para las flechas y ⌫
+        elif h == Herramienta.EDITAR_TEXTO:
+            self.setFocus(Qt.MouseFocusReason)
+            linea = self._linea_en(w.indice, p)
+            sel = self._lineas_sel[1] if self._lineas_sel and self._lineas_sel[0] == w.indice else []
+            if linea is None:  # recuadro para elegir varias líneas
+                self._lineas_sel = None
+                self._arrastre = {"tipo": "banda", "indice": w.indice}
+            elif ev.modifiers() & Qt.ShiftModifier:  # ⇧+clic: añadir o quitar una línea
+                nuevas = [l for l in sel if l is not linea] if any(l is linea for l in sel) else sel + [linea]
+                self._lineas_sel = (w.indice, nuevas) if nuevas else None
+                self._arrastre = {"tipo": "nada", "indice": w.indice}
+            else:
+                if not any(l is linea for l in sel):
+                    self._lineas_sel = (w.indice, [linea])
+                self._arrastre = {"tipo": "lineas", "indice": w.indice, "linea": linea}
         elif h == Herramienta.DIBUJO:
             self._trazo = [pos]
         w.update()
@@ -519,6 +702,9 @@ class VistaPDF(QScrollArea):
         h = self.herramienta
         if self._inicio is not None and self._pagina_activa is w:
             self._actual = pos
+            if self._arrastre is not None:
+                self._actualizar_arrastre(w, pos)
+                return
             if h == Herramienta.MANO and self._arrastre_mano is not None:
                 g = ev.globalPosition().toPoint()
                 d = g - self._arrastre_mano
@@ -537,11 +723,9 @@ class VistaPDF(QScrollArea):
         # Sin botón pulsado: efectos al pasar el ratón
         p = w.a_pdf(pos)
         if h == Herramienta.EDITAR_TEXTO:
-            nueva = None
-            for linea in self._lineas_de(w.indice):
-                if linea["rect"].contains(p):
-                    nueva = (w.indice, linea["rect"])
-                    break
+            linea = self._linea_en(w.indice, p)
+            nueva = (w.indice, linea["rect"]) if linea else None
+            w.setCursor(Qt.SizeAllCursor if linea else Qt.CrossCursor)
             if nueva != self._hover_linea:
                 self._hover_linea = nueva
                 w.update()
@@ -552,8 +736,13 @@ class VistaPDF(QScrollArea):
                 self._hover_anot = nueva
                 w.update()
         elif h == Herramienta.SELECCIONAR:
+            asa = self._asa_en(w, pos)
             if self._widget_en(w.indice, p) is not None or self._enlace_en(w.indice, p) is not None:
                 w.setCursor(Qt.PointingHandCursor)
+            elif asa is not None:
+                w.setCursor(Qt.SizeFDiagCursor if asa in ("tl", "br") else Qt.SizeBDiagCursor)
+            elif mover.es_movible(self._anotacion_en(w.indice, p)):
+                w.setCursor(Qt.SizeAllCursor)
             else:
                 w.setCursor(Qt.IBeamCursor)
 
@@ -569,6 +758,11 @@ class VistaPDF(QScrollArea):
         rect = pymupdf.Rect(p0, p1)
         rect.normalize()
         es_click = (fin - inicio).manhattanLength() < 4
+
+        if self._arrastre is not None:
+            self._terminar_arrastre(w, inicio, fin, es_click)
+            w.update()
+            return
 
         if h == Herramienta.MANO:
             self._arrastre_mano = None
@@ -749,6 +943,8 @@ class VistaPDF(QScrollArea):
             painter.setBrush(QColor(220, 40, 40, 30))
             painter.drawRect(w.a_pantalla(self._hover_anot[1]).adjusted(-2, -2, 2, 2))
 
+        self._dibujar_movimiento(w, painter)
+
         if self._pagina_activa is not w or self._inicio is None:
             return
         h = self.herramienta
@@ -781,6 +977,59 @@ class VistaPDF(QScrollArea):
                 painter.setPen(QPen(self.color_trazo, self.grosor * self.zoom))
                 painter.setBrush(Qt.NoBrush)
                 painter.drawRect(r)
+
+    def _dibujar_movimiento(self, w: PaginaWidget, painter: QPainter) -> None:
+        """Lo seleccionado para mover y, mientras se arrastra, un «fantasma» en su sitio nuevo."""
+        a = self._arrastre if self._arrastre and self._arrastre["indice"] == w.indice else None
+        moviendo = a is not None and a["tipo"] in ("lineas", "anot") and "d" in a
+        if self._lineas_sel and self._lineas_sel[0] == w.indice and not moviendo:
+            painter.setPen(QPen(self._color_acento(), 1.5, Qt.DashLine))
+            painter.setBrush(self._color_acento(30))
+            for linea in self._lineas_sel[1]:
+                painter.drawRect(w.a_pantalla(linea["rect"]).adjusted(-2, -2, 2, 2))
+        annot = self._anotacion_sel() if self._anot_sel and self._anot_sel[0] == w.indice else None
+        if annot is not None and not moviendo:
+            painter.setPen(QPen(self._color_acento(), 1.5, Qt.DashLine))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(w.a_pantalla(annot.rect).adjusted(-3, -3, 3, 3))
+            if mover.es_redimensionable(annot):
+                painter.setPen(QPen(self._color_acento(), 1.2))
+                painter.setBrush(QColor("#FFFFFF"))
+                for asa in self._asas(w, annot.rect).values():
+                    painter.drawRect(asa)
+        if a is None:
+            return
+        if moviendo:
+            rects = ([l["rect"] for l in self._lineas_sel[1]] if a["tipo"] == "lineas" and self._lineas_sel
+                     else [a["rect"]] if a["tipo"] == "anot" else [])
+            self._dibujar_fantasma(w, painter, rects, *a["d"])
+        elif a["tipo"] == "asa":
+            nuevo = self._rect_redimensionado(w, a)
+            if nuevo is not None:
+                painter.setPen(QPen(self._color_acento(), 1.5, Qt.DashLine))
+                painter.setBrush(self._color_acento(25))
+                painter.drawRect(w.a_pantalla(nuevo))
+        elif a["tipo"] == "banda" and "actual" in a and self._inicio is not None:
+            painter.setPen(QPen(self._color_acento(), 1, Qt.DashLine))
+            painter.setBrush(self._color_acento(18))
+            painter.drawRect(QRectF(self._inicio, a["actual"]).normalized())
+
+    def _dibujar_fantasma(self, w: PaginaWidget, painter: QPainter, rects: list, dx: float, dy: float) -> None:
+        pix = self.pixmap_de(w.indice)
+        if pix is None or w.width() == 0:
+            return
+        escala = pix.width() / w.width()
+        for r in rects:
+            origen = w.a_pantalla(r).adjusted(-1, -1, 1, 1)
+            destino = w.a_pantalla(pymupdf.Rect(r) + (dx, dy, dx, dy)).adjusted(-1, -1, 1, 1)
+            painter.fillRect(origen, QColor(255, 255, 255, 150))  # de aquí se va
+            painter.setOpacity(0.85)
+            painter.drawPixmap(destino, pix, QRectF(origen.x() * escala, origen.y() * escala,
+                                                    origen.width() * escala, origen.height() * escala))
+            painter.setOpacity(1)
+            painter.setPen(QPen(self._color_acento(), 1.5, Qt.DashLine))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(destino.adjusted(-1, -1, 1, 1))
 
     # ------------------------------------------------------------------
     # Búsqueda

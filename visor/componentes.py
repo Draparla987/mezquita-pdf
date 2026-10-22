@@ -370,6 +370,8 @@ class FilaReciente(QFrame):
         super().__init__()
         self.ruta = ruta
         self.setObjectName("filaReciente")
+        # Siempre su altura: si no, con la ventana baja se aplasta y el nombre pisa la carpeta
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.setAttribute(Qt.WA_Hover, True)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(ruta)
@@ -400,6 +402,17 @@ class FilaReciente(QFrame):
             self.pulsada.emit(self.ruta)
 
 
+class _ZonaAjustada(QScrollArea):
+    """Zona con desplazamiento que pide la altura de su contenido (QScrollArea la limita)."""
+
+    def sizeHint(self) -> QSize:
+        w = self.widget()
+        return w.sizeHint() + QSize(0, 4) if w is not None else super().sizeHint()
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(super().minimumSizeHint().width(), 0)
+
+
 class PantallaBienvenida(QWidget):
     abrir_solicitado = Signal()
     reciente_solicitado = Signal(str)
@@ -410,8 +423,10 @@ class PantallaBienvenida(QWidget):
         super().__init__(parent)
         self.setObjectName("bienvenida")
         self.setAutoFillBackground(False)
+        self._alto_friso = 120
+        self._tam_logo = 96
         externa = QVBoxLayout(self)
-        externa.setContentsMargins(40, 150, 40, 16)
+        externa.setContentsMargins(40, self._alto_friso + 30, 40, 16)
         externa.addStretch(1)
 
         centro = QVBoxLayout()
@@ -460,7 +475,7 @@ class PantallaBienvenida(QWidget):
         fila.addWidget(firmas)
         fila.addStretch()
         centro.addLayout(fila)
-        pista = QLabel("o arrastra un archivo PDF a esta ventana")
+        pista = self.pista = QLabel("o arrastra un archivo PDF a esta ventana")
         pista.setObjectName("subtituloBienvenida")
         pista.setStyleSheet("font-size: 12px;")
         pista.setAlignment(Qt.AlignCenter)
@@ -503,17 +518,44 @@ class PantallaBienvenida(QWidget):
         self.capa_recientes = QVBoxLayout(self.caja_recientes)
         self.capa_recientes.setContentsMargins(0, 0, 0, 0)
         self.capa_recientes.setSpacing(2)
+        self.capa_recientes.setSizeConstraint(QVBoxLayout.SetMinAndMaxSize)
+        # Si la ventana es baja, la lista se desplaza en lugar de aplastarse
+        self.zona_recientes = _ZonaAjustada()
+        self.zona_recientes.setObjectName("zonaDesplazable")
+        self.zona_recientes.setWidget(self.caja_recientes)
+        self.zona_recientes.setWidgetResizable(True)
+        self.zona_recientes.setFrameShape(QFrame.NoFrame)
+        self.zona_recientes.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.zona_recientes.setStyleSheet("QScrollArea#zonaDesplazable { background: transparent; }"
+                                          "QScrollArea#zonaDesplazable > QWidget > QWidget { background: transparent; }")
+        self.zona_recientes.setMaximumWidth(640)
+        self.zona_recientes.setMinimumWidth(480)
+        self.zona_recientes.setMinimumHeight(0)
         contenedor = QHBoxLayout()
         contenedor.addStretch()
-        contenedor.addWidget(self.caja_recientes)
+        contenedor.addWidget(self.zona_recientes)
         contenedor.addStretch()
         externa.addLayout(contenedor)
         externa.addStretch(2)
-        pie = QLabel(f"Versión {tema.VERSION} · inspirado en la Mezquita de Córdoba")
+        pie = self.pie = QLabel(f"Versión {tema.VERSION} · inspirado en la Mezquita de Córdoba")
         pie.setObjectName("subtituloBienvenida")
         pie.setStyleSheet("font-size: 11px;")
         pie.setAlignment(Qt.AlignCenter)
         externa.addWidget(pie)
+
+    def resizeEvent(self, ev) -> None:
+        """En ventanas bajas (portátiles) el friso y el logo encogen para dejar sitio a Recientes."""
+        super().resizeEvent(ev)
+        h = self.height()
+        self._alto_friso = int(max(46, min(120, h * 0.16)))
+        m = self.layout().contentsMargins()
+        self.layout().setContentsMargins(m.left(), self._alto_friso + 30, m.right(), m.bottom())
+        tam = 96 if h >= 640 else 64
+        if tam != self._tam_logo:
+            self._tam_logo = tam
+            self.logo.setPixmap(tema.pixmap_logo(tam))
+        self.pista.setVisible(h >= 520)
+        self.pie.setVisible(h >= 520)
 
     def mostrar_aviso(self, texto: str, texto_boton: str, al_aceptar, al_cerrar) -> None:
         p = tema.paleta()
@@ -544,9 +586,9 @@ class PantallaBienvenida(QWidget):
                 item.widget().deleteLater()
         rutas = [r for r in rutas if os.path.exists(r)][:6]
         if not rutas:
-            self.caja_recientes.hide()
+            self.zona_recientes.hide()
             return
-        self.caja_recientes.show()
+        self.zona_recientes.show()
         cab = QLabel("RECIENTES")
         cab.setObjectName("seccion")
         self.capa_recientes.addWidget(cab)
@@ -554,14 +596,17 @@ class PantallaBienvenida(QWidget):
             fila = FilaReciente(ruta)
             fila.pulsada.connect(self.reciente_solicitado.emit)
             self.capa_recientes.addWidget(fila)
+        # Ocupa lo que necesita la lista (no más); si no hay sitio, menos y con desplazamiento
+        self.capa_recientes.activate()
+        self.zona_recientes.setMaximumHeight(self.caja_recientes.sizeHint().height() + 4)
 
     def paintEvent(self, _ev) -> None:
         p = QPainter(self)
         pal = tema.paleta()
         p.fillRect(self.rect(), QColor(pal.fondo))
         # Friso de arquería en la parte superior
-        n = max(5, self.width() // 150)
-        alto = 120
+        alto = self._alto_friso
+        n = max(5, int(self.width() / (alto * 1.25)))
         tema.dibujar_arqueria(p, QRectF(-20, 14, self.width() + 40, alto), n, pal,
                               0.20 if not pal.oscuro else 0.28)
         p.end()
