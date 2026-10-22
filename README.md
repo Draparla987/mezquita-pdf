@@ -12,12 +12,21 @@ Descargas (siempre la última versión publicada):
 
 ## Instalar en el Mac
 
-1. Abre **`MezquitaPDF.dmg`** (o descárgalo de la pestaña *Actions* del repositorio: elige
-   `MezquitaPDF-apple-silicon` para Mac con chip M1/M2/M3… o `MezquitaPDF-intel`).
-2. Arrastra **Mezquita PDF** a la carpeta **Aplicaciones**.
-3. Ábrela desde Aplicaciones o Launchpad. Si macOS avisa de que no puede comprobar el
-   desarrollador (pasa con el `.dmg` descargado de GitHub): clic derecho sobre la app →
-   **Abrir** → **Abrir**. Solo la primera vez.
+1. Descarga el `.dmg` de tu Mac (enlaces de arriba) y ábrelo.
+2. Arrastra **Mezquita PDF** a la carpeta **Aplicaciones** (si ya la tenías, elige *Reemplazar*).
+3. Ábrela desde Aplicaciones o Launchpad.
+
+**Si macOS avisa al abrirla** («Apple no ha podido verificar que “Mezquita PDF” no contenga
+software malicioso…»): pasa solo la primera vez, porque la app no está notarizada por Apple.
+1. En el aviso, pulsa **Hecho** (no «Trasladar a la papelera»).
+2. Abre **Ajustes del Sistema → Privacidad y seguridad** y baja hasta *Seguridad*. Verás
+   «Se ha bloqueado “Mezquita PDF”…»: pulsa **Abrir igualmente**.
+3. Confirma con tu contraseña o Touch ID y, en la ventana siguiente, pulsa **Abrir igualmente**.
+
+Desde ese momento se abre con normalidad. Las actualizaciones que instala la propia app no
+vuelven a mostrar el aviso. En macOS 14 o anterior también vale: clic derecho sobre la app →
+**Abrir** → **Abrir**. Si dijera que la app «está dañada», ejecuta en Terminal
+`xattr -dr com.apple.quarantine "/Applications/Mezquita PDF.app"` y vuelve a abrirla.
 
 Atajo para quien compila en su Mac: `./construir_app.sh --instalar` la copia a Aplicaciones.
 Desde el código sin compilar: `./MezquitaPDF.command`.
@@ -183,9 +192,8 @@ pestaña *Actions* del repositorio; al crear una etiqueta `v2.1.0` se publican e
 
 En local: `./construir_app.sh --dmg` crea `MezquitaPDF.dmg` para la arquitectura de tu Mac.
 
-Al abrirla por primera vez en otro Mac, como no está notarizada por Apple: clic derecho sobre
-la app → **Abrir** → **Abrir** (o *Ajustes del Sistema → Privacidad y seguridad → Abrir
-igualmente*).
+Al abrirla por primera vez en otro Mac, como no está notarizada por Apple, macOS avisará: ver
+«Si macOS avisa al abrirla», en *Instalar en el Mac*.
 
 Diagnóstico rápido (sin datos personales):
 `"/Applications/Mezquita PDF.app/Contents/MacOS/Mezquita PDF" --diagnostico`
