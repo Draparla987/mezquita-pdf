@@ -767,7 +767,10 @@ class DialogoFirmaDigital(QDialog):
         for ruta in marcas.guardadas():
             self.combo_marca.addItem(QIcon(str(ruta)), ruta.stem, str(ruta))
         self.combo_marca.addItem("Sin marca de agua", marcas.NINGUNA)
-        self.combo_marca.setCurrentIndex(max(0, self.combo_marca.findData(elegir)))
+        indice = self.combo_marca.findData(elegir)
+        if indice < 0 and elegir:  # también por nombre («IMIBIC»), como lo deja el instalador de una edición
+            indice = self.combo_marca.findText(Path(elegir).stem)
+        self.combo_marca.setCurrentIndex(max(0, indice))
         self.combo_marca.blockSignals(False)
         self._marca_cambiada()
 

@@ -6,6 +6,12 @@
 #ifndef Version
   #define Version "0.0.0"
 #endif
+; Ediciones con logotipos para la marca de agua del sello (p. ej. la del IMIBIC):
+;   /DMarcas=carpeta_con_los_png /DMarcaPorDefecto=IMIBIC /DSalida=MezquitaPDF-IMIBIC-windows
+; Los logotipos van a la carpeta de datos del usuario, así que las actualizaciones normales no los tocan.
+#ifndef Salida
+  #define Salida "MezquitaPDF-windows"
+#endif
 
 [Setup]
 AppId={{6E0B3C2A-6F1D-4C8E-9C7A-3F2D5B8E1A47}
@@ -24,7 +30,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=MezquitaPDF-windows
+OutputBaseFilename={#Salida}
 SetupIconFile=icono.ico
 UninstallDisplayIcon={app}\Mezquita PDF.exe
 UninstallDisplayName=Mezquita PDF
@@ -43,6 +49,9 @@ Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"; Fla
 
 [Files]
 Source: "..\dist\Mezquita PDF\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifdef Marcas
+Source: "{#Marcas}\*.png"; DestDir: "{userappdata}\MezquitaPDF\marcas"; Flags: onlyifdoesntexist uninsneveruninstall
+#endif
 
 [InstallDelete]
 ; Restos de la versión anterior (las bibliotecas cambian de nombre entre versiones)
@@ -53,6 +62,10 @@ Name: "{autoprograms}\Mezquita PDF"; Filename: "{app}\Mezquita PDF.exe"; AppUser
 Name: "{autodesktop}\Mezquita PDF"; Filename: "{app}\Mezquita PDF.exe"; Tasks: escritorio; AppUserModelID: "MezquitaPDF.App"
 
 [Registry]
+#ifdef MarcaPorDefecto
+; Marca de agua elegida de entrada (solo si el usuario no ha elegido otra)
+Root: HKCU; Subkey: "Software\MezquitaPDF\Mezquita PDF\firma"; ValueType: string; ValueName: "marca"; ValueData: "{#MarcaPorDefecto}"; Flags: createvalueifdoesntexist
+#endif
 ; Tipo de documento propio y «Abrir con» para los .pdf (no cambia la app predeterminada:
 ; eso lo decide el usuario en Configuración, como exige Windows)
 Root: HKA; Subkey: "Software\Classes\MezquitaPDF.Documento"; ValueType: string; ValueName: ""; ValueData: "Documento PDF"; Flags: uninsdeletekey

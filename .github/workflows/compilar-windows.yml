@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      edicion_imibic:
+        description: "Crear también la edición del IMIBIC (logotipos de los secretos MARCA_IMIBIC y MARCA_FIBICO)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -108,6 +113,44 @@ jobs:
         with:
           name: MezquitaPDF-windows
           path: dist/MezquitaPDF-windows.exe
+
+      # Edición del IMIBIC: el mismo programa con sus logotipos para la marca de agua del sello.
+      # Los logotipos vienen de secretos del repositorio (no están en el código) y el instalador solo
+      # se guarda un día, como artefacto, para descargarlo. Nunca se publica en Releases.
+      - name: Crear y probar la edición del IMIBIC
+        if: github.event_name == 'workflow_dispatch' && inputs.edicion_imibic
+        shell: pwsh
+        env:
+          MARCA_IMIBIC: ${{ secrets.MARCA_IMIBIC }}
+          MARCA_FIBICO: ${{ secrets.MARCA_FIBICO }}
+        run: |
+          if (-not $env:MARCA_IMIBIC -or -not $env:MARCA_FIBICO) { throw "Faltan los secretos MARCA_IMIBIC y MARCA_FIBICO" }
+          $marcas = Join-Path $env:RUNNER_TEMP 'marcas'
+          New-Item -ItemType Directory -Force $marcas | Out-Null
+          [IO.File]::WriteAllBytes("$marcas\IMIBIC.png", [Convert]::FromBase64String($env:MARCA_IMIBIC))
+          [IO.File]::WriteAllBytes("$marcas\FIBICO.png", [Convert]::FromBase64String($env:MARCA_FIBICO))
+          $version = python -c "import sys; sys.path.insert(0, 'visor'); import version; print(version.VERSION)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp "/DVersion=$version" "/DMarcas=$marcas" `
+            "/DMarcaPorDefecto=IMIBIC" "/DSalida=MezquitaPDF-IMIBIC-windows" recursos\instalador_windows.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Start-Process dist\MezquitaPDF-IMIBIC-windows.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          $app = "$env:LOCALAPPDATA\Programs\Mezquita PDF"
+          & "$app\mezquita-mcp.exe" --diagnostico
+          foreach ($n in 'IMIBIC', 'FIBICO') {
+            if (-not (Test-Path "$env:APPDATA\MezquitaPDF\marcas\$n.png")) { throw "Falta el logotipo $n" }
+          }
+          $elegida = (Get-ItemProperty 'HKCU:\Software\MezquitaPDF\Mezquita PDF\firma').marca
+          if ($elegida -ne 'IMIBIC') { throw "Marca de agua de entrada: '$elegida'" }
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait
+          Get-Item dist\MezquitaPDF-IMIBIC-windows.exe | Format-List Name, Length
+          Write-Output "Edición del IMIBIC: logotipos instalados e IMIBIC elegido de entrada"
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.edicion_imibic
+        with:
+          name: MezquitaPDF-IMIBIC-windows
+          path: dist/MezquitaPDF-IMIBIC-windows.exe
+          retention-days: 1
 
       - name: Publicar en Releases (solo etiquetas v*)
         if: startsWith(github.ref, 'refs/tags/v')

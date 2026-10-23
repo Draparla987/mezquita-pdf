@@ -127,7 +127,10 @@ assert len(set(sellos.values())) == 3, "cada marca de agua debe cambiar el sello
 con_logo = fd.firmar_pdf(datos, firmante, pagina=0, caja=(330, 50, 560, 120), marca=str(ruta_logo))
 assert fd.verificar_firmas(con_logo)[0].integra
 llavero.listar_certificados = lambda *a, **k: []  # sin leer el Llavero de nadie
+from PySide6.QtCore import QSettings  # noqa: E402
+QSettings().setValue("firma/marca", "Mi organización")  # por nombre, como el instalador de una edición
 dlg = DialogoFirmaDigital(None)
+assert dlg.marca == str(ruta_logo), dlg.marca
 assert [dlg.combo_marca.itemText(i) for i in range(dlg.combo_marca.count())] == [
     "Arco de Mezquita PDF", "Mi organización", "Sin marca de agua"]
 dlg.combo_marca.setCurrentIndex(1)
