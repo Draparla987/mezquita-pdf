@@ -108,6 +108,12 @@ tarjetas como el DNIe si macOS las reconoce con su lector).
 La clave privada **nunca sale del Llavero**: es macOS quien realiza la operación de firma.
 Como alternativa, el botón *Usar un archivo de certificado (.p12 / .pfx)* sigue disponible.
 
+**Marca de agua del sello.** De fondo, muy suave, el sello lleva el arco de la Mezquita. En
+*Opciones → Marca de agua* puedes elegir otro: pulsa **Añadir logotipo…** y elige el de tu
+organización (PNG o JPG; el fondo blanco se quita solo y la intensidad se ajusta para que no
+tape el texto). Los logotipos se guardan en la carpeta de datos de la app (`marcas`), así que
+las actualizaciones no los tocan. También puedes elegir *Sin marca de agua*.
+
 Para probarlo sin tu certificado real usa `ejemplos/certificado_prueba.p12` (contraseña `1234`).
 Es un certificado de prueba autofirmado: la firma será íntegra, pero aparecerá como
 "identidad no verificada".
@@ -207,6 +213,7 @@ visor/vista.py          Renderizado de páginas, zoom y herramientas de edición
 visor/documento.py      Documento PDF con deshacer/rehacer y guardado incremental
 visor/dialogos.py       Diálogos (texto, firmas manuscritas, certificado, verificación)
 visor/firma_digital.py  Firma PAdES y verificación (pyHanko)
+visor/marcas.py         Logotipos propios para la marca de agua del sello
 visor/llavero.py        Certificados del Llavero de macOS y firma sin exportar la clave
 visor/compartir.py      Correo, WhatsApp y servicios de compartir de macOS
 visor/tema.py           Paleta, estilos, iconos y logotipo (arco de la Mezquita)

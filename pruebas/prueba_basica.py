@@ -106,5 +106,37 @@ else:
     guion = act.guion_sustitucion(1, Path("/A/Mezquita PDF.app"), Path("/N/Mezquita PDF.app"), Path("/C/anterior.app"), False)
     assert "mv '/A/Mezquita PDF.app' /C/anterior.app" in guion and "open" not in guion.split("fi\n")[-1]
 
+# 8. Marca de agua del sello: logotipo propio (JPG con fondo blanco) en lugar del arco
+from PIL import Image, ImageDraw  # noqa: E402
+from visor import llavero, marcas  # noqa: E402
+from visor.dialogos import DialogoFirmaDigital  # noqa: E402
+logo = Image.new("RGB", (300, 120), "white")
+dibujo = ImageDraw.Draw(logo)
+dibujo.ellipse((20, 20, 100, 100), fill=(0, 90, 160))
+dibujo.rectangle((130, 50, 280, 70), fill=(60, 60, 60))
+logo.save(TMP / "Mi organización.jpg", quality=92)
+ruta_logo = marcas.anadir(TMP / "Mi organización.jpg")
+limpio = Image.open(ruta_logo)
+assert ruta_logo.name == "Mi organización.png" and limpio.mode == "RGBA"
+assert limpio.getpixel((0, limpio.height - 1))[3] == 0, "el fondo blanco debe quedar transparente"
+r, g, b, a = limpio.getpixel((40, limpio.height // 2))
+assert a > 240 and abs(r - 0) < 25 and abs(g - 90) < 25 and abs(b - 160) < 25, (r, g, b, a)
+sellos = {m: fd.componer_sello(ancho_pt=200, alto_pt=80, titular="PRUEBA", motivo="", lugar="", rubrica_png=None,
+                               marca=m).tobytes() for m in (None, fd.MARCA_MEZQUITA, str(ruta_logo))}
+assert len(set(sellos.values())) == 3, "cada marca de agua debe cambiar el sello"
+con_logo = fd.firmar_pdf(datos, firmante, pagina=0, caja=(330, 50, 560, 120), marca=str(ruta_logo))
+assert fd.verificar_firmas(con_logo)[0].integra
+llavero.listar_certificados = lambda *a, **k: []  # sin leer el Llavero de nadie
+dlg = DialogoFirmaDigital(None)
+assert [dlg.combo_marca.itemText(i) for i in range(dlg.combo_marca.count())] == [
+    "Arco de Mezquita PDF", "Mi organización", "Sin marca de agua"]
+dlg.combo_marca.setCurrentIndex(1)
+assert dlg.marca == str(ruta_logo) and dlg.boton_quitar_marca.isEnabled()
+dlg.combo_marca.setCurrentIndex(2)
+assert dlg.marca is None and not dlg.boton_quitar_marca.isEnabled()
+dlg.close()
+marcas.quitar(ruta_logo)
+assert marcas.guardadas() == []
+
 shutil.rmtree(TMP, ignore_errors=True)
 print("✅ Prueba básica superada")

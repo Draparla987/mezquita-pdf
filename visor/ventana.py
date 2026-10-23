@@ -1674,6 +1674,7 @@ class VentanaPrincipal(QMainWindow):
                 contacto=dlg.campo_contacto.text().strip(),
                 url_sello_tiempo=dlg.url_tsa,
                 certificar=dlg.chk_certificar.isChecked(),
+                marca=dlg.marca,
             )
             tmp = destino + ".tmp"
             with open(tmp, "wb") as fh:

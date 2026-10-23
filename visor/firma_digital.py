@@ -54,6 +54,8 @@ def _fuente(candidatas: list[str], tam: int) -> ImageFont.ImageFont:
 
 
 OPACIDAD_MARCA = 0.13  # intensidad del arco de fondo
+TINTA_MARCA = 0.1  # lo que oscurece la parte más oscura de la marca (≈ granate del arco × 0,13)
+MARCA_MEZQUITA = "mezquita"  # = marcas.MEZQUITA (este módulo no depende de Qt)
 
 
 def _marca_agua(alto_px: int) -> Image.Image | None:
@@ -74,6 +76,42 @@ def _marca_agua(alto_px: int) -> Image.Image | None:
         return None
 
 
+def _opacidad_logotipo(img: Image.Image) -> float:
+    """Opacidad para que cualquier logotipo se vea tan suave como el arco: se fija por su parte más
+    oscura (uno negro necesita menos que uno gris claro)."""
+    fondo = Image.new("RGBA", img.size, "white")
+    fondo.alpha_composite(img)
+    hist = fondo.convert("L").histogram(mask=img.getchannel("A").point(lambda a: 255 if a > 32 else 0))
+    total, acumulado, nivel = sum(hist), 0, 0
+    for nivel, n in enumerate(hist):  # luminancia del 5 % más oscuro
+        acumulado += n
+        if acumulado >= total * 0.05:
+            break
+    pico = 1 - nivel / 255
+    return max(0.09, min(0.2, TINTA_MARCA / max(pico, 0.05)))
+
+
+def _imagen_marca(marca: str | None, ancho_px: int, alto_px: int) -> Image.Image | None:
+    """Marca de agua ya atenuada y del tamaño del sello: el arco de la Mezquita, un logotipo
+    (ruta a un PNG con fondo transparente) o ninguna."""
+    if not marca:
+        return None
+    if marca == MARCA_MEZQUITA:
+        img, opacidad = _marca_agua(int(alto_px * 0.94)), OPACIDAD_MARCA
+    else:
+        try:
+            img = Image.open(marca).convert("RGBA")
+        except Exception:
+            return None
+        opacidad = _opacidad_logotipo(img)
+        factor = min(ancho_px * 0.9 / img.width, alto_px * 0.86 / img.height)
+        img = img.resize((max(1, int(img.width * factor)), max(1, int(img.height * factor))), Image.LANCZOS)
+    if img is None:
+        return None
+    img.putalpha(img.getchannel("A").point(lambda a: int(a * opacidad)))
+    return img
+
+
 def _recortar_trazo(img: Image.Image) -> Image.Image:
     """Quita el margen transparente (o blanco) de la rúbrica para que ocupe su sitio de verdad."""
     alfa = img.getchannel("A")
@@ -86,23 +124,22 @@ def _recortar_trazo(img: Image.Image) -> Image.Image:
 
 def componer_sello(
     *, ancho_pt: float, alto_pt: float, titular: str, motivo: str, lugar: str,
-    rubrica_png: bytes | None, marca: bool = True,
+    rubrica_png: bytes | None, marca: str | None = MARCA_MEZQUITA,
 ) -> Image.Image:
     """Apariencia visible de la firma, del tamaño exacto del recuadro dibujado.
 
     Rúbrica a la izquierda (a toda la altura), datos a la derecha con la letra más grande que
-    quepa y, de fondo, el arco de la Mezquita muy suave (como el logotipo de Acrobat).
+    quepa y, de fondo, muy suave, el arco de la Mezquita o el logotipo elegido (como hace Acrobat
+    con el suyo). `marca`: "mezquita", la ruta de un logotipo o None (sin marca de agua).
     """
     escala = 6  # resolución alta para que se vea nítido al ampliar
     w, h = max(int(ancho_pt * escala), 60), max(int(alto_pt * escala), 30)
     margen = max(2, int(min(w, h) * 0.05))
     img = Image.new("RGBA", (w, h), (255, 255, 255, 0))
 
-    if marca:
-        arco = _marca_agua(int(h * 0.94))
-        if arco is not None:
-            arco.putalpha(arco.getchannel("A").point(lambda a: int(a * OPACIDAD_MARCA)))
-            img.alpha_composite(arco, ((w - arco.width) // 2, (h - arco.height) // 2))
+    fondo = _imagen_marca(marca, w, h)
+    if fondo is not None:
+        img.alpha_composite(fondo, ((w - fondo.width) // 2, (h - fondo.height) // 2))
 
     dibujo = ImageDraw.Draw(img)
     lineas = [("Firmado digitalmente por:", False), (titular, True),
@@ -269,6 +306,7 @@ def firmar_pdf(
     contacto: str = "",
     url_sello_tiempo: str | None = None,
     certificar: bool = False,
+    marca: str | None = MARCA_MEZQUITA,
 ) -> bytes:
     """Firma el PDF y devuelve los bytes del documento firmado.
 
@@ -309,6 +347,7 @@ def firmar_pdf(
             motivo=motivo,
             lugar=lugar,
             rubrica_png=imagen_png,
+            marca=marca,
         )
         estilo = stamp.StaticStampStyle(
             background=images.PdfImage(imagen_sello),
