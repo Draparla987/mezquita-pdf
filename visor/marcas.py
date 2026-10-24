@@ -14,6 +14,7 @@ from PIL import Image, ImageChops, ImageMath
 
 MEZQUITA = "mezquita"  # el arco de la app (predeterminada)
 NINGUNA = ""  # sello sin marca de agua
+AJUSTE = "firma/marca"  # la elegida en Firmar → Marca de agua del sello
 TAM_MAX = 1600  # px del lado mayor: de sobra para el sello
 FILTRO = "Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"
 
@@ -73,6 +74,33 @@ def anadir(origen: str | Path) -> Path:
     destino = _nombre_libre(origen.stem)
     img.save(destino, "PNG")
     return destino
+
+
+def elegida() -> str | None:
+    """Marca de agua de todas las firmas: "mezquita", la ruta del logotipo o None (ninguna).
+
+    Admite también solo el nombre del logotipo («IMIBIC»), que es como lo deja el instalador de una
+    edición. Si el logotipo elegido ya no está, vuelve al arco."""
+    from PySide6.QtCore import QSettings
+    valor = QSettings().value(AJUSTE, MEZQUITA)
+    valor = "" if valor is None else str(valor)
+    if valor in (MEZQUITA, NINGUNA):
+        return valor or None
+    for ruta in guardadas():
+        if str(ruta) == valor or ruta.stem == Path(valor).stem:
+            return str(ruta)
+    return MEZQUITA
+
+
+def elegir(marca: str | None) -> None:
+    from PySide6.QtCore import QSettings
+    QSettings().setValue(AJUSTE, marca or NINGUNA)
+
+
+def nombre(marca: str | None) -> str:
+    if marca == MEZQUITA:
+        return "Arco de Mezquita PDF"
+    return Path(marca).stem if marca else "Sin marca de agua"
 
 
 def quitar(ruta: str | Path) -> None:

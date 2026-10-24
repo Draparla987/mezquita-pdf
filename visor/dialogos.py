@@ -611,30 +611,17 @@ class DialogoFirmaDigital(QDialog):
         self.combo_rubrica.setIconSize(QSize(90, 30))
         if self.combo_rubrica.count() > 1:
             self.combo_rubrica.setCurrentIndex(1)
-        # Marca de agua del fondo del sello: el arco de la app, un logotipo propio o ninguna
-        self.combo_marca = QComboBox()
-        self.combo_marca.setIconSize(QSize(60, 30))
-        self.combo_marca.setToolTip("Imagen muy suave que se ve detrás del texto del sello")
-        self.combo_marca.currentIndexChanged.connect(self._marca_cambiada)
-        anadir_marca = QPushButton("Añadir logotipo…")
-        anadir_marca.setToolTip("Usa el logotipo de tu organización (PNG o JPG). El fondo blanco se "
-                                "quita solo.")
-        anadir_marca.clicked.connect(self._anadir_marca)
-        self.boton_quitar_marca = QPushButton("Quitar")
-        self.boton_quitar_marca.setToolTip("Quita este logotipo de la lista")
-        self.boton_quitar_marca.clicked.connect(self._quitar_marca)
-        fila_marca = QHBoxLayout()
-        fila_marca.addWidget(self.combo_marca, 1)
-        fila_marca.addWidget(anadir_marca)
-        fila_marca.addWidget(self.boton_quitar_marca)
-        self._rellenar_marcas(self.ajustes.value("firma/marca", marcas.MEZQUITA))
+        # Marca de agua: la predeterminada del menú Firmar (aquí no se pregunta, solo se indica)
+        self.etiqueta_marca = QLabel(f"<b>{marcas.nombre(marcas.elegida())}</b> (se cambia en el menú Firmar)")
+        self.etiqueta_marca.setWordWrap(True)
+        self.etiqueta_marca.setStyleSheet(f"color: {p.texto_suave};")
         sello = QFormLayout()
         sello.addRow("Rúbrica en el sello:", self.combo_rubrica)
-        sello.addRow("Marca de agua:", fila_marca)
+        sello.addRow("Marca de agua:", self.etiqueta_marca)
         if visible:
             fa.addLayout(sello)
         else:
-            for w in (self.combo_rubrica, self.combo_marca, anadir_marca, self.boton_quitar_marca):
+            for w in (self.combo_rubrica, self.etiqueta_marca):
                 w.setVisible(False)
         self.chk_tsa = QCheckBox("Añadir sello de tiempo de una TSA (requiere Internet)")
         self.chk_tsa.setChecked(self.ajustes.value("firma/tsa", False, type=bool))
@@ -758,47 +745,6 @@ class DialogoFirmaDigital(QDialog):
         self.ajustes.setValue("firma/ruta_cert", ruta)
         self._actualizar_boton()
 
-    # --- Marca de agua del sello ------------------------------------------
-    def _rellenar_marcas(self, elegir: str) -> None:
-        self.combo_marca.blockSignals(True)
-        self.combo_marca.clear()
-        arco = QPixmap.fromImage(tema.imagen_marca_agua(60))
-        self.combo_marca.addItem(QIcon(arco), "Arco de Mezquita PDF", marcas.MEZQUITA)
-        for ruta in marcas.guardadas():
-            self.combo_marca.addItem(QIcon(str(ruta)), ruta.stem, str(ruta))
-        self.combo_marca.addItem("Sin marca de agua", marcas.NINGUNA)
-        indice = self.combo_marca.findData(elegir)
-        if indice < 0 and elegir:  # también por nombre («IMIBIC»), como lo deja el instalador de una edición
-            indice = self.combo_marca.findText(Path(elegir).stem)
-        self.combo_marca.setCurrentIndex(max(0, indice))
-        self.combo_marca.blockSignals(False)
-        self._marca_cambiada()
-
-    def _marca_cambiada(self) -> None:
-        self.boton_quitar_marca.setEnabled(self.combo_marca.currentData() not in (marcas.MEZQUITA, marcas.NINGUNA))
-
-    def _anadir_marca(self) -> None:
-        rutas, _ = QFileDialog.getOpenFileNames(self, "Añadir logotipo como marca de agua", str(Path.home()),
-                                                marcas.FILTRO)
-        ultima = None
-        for ruta in rutas:
-            try:
-                ultima = marcas.anadir(ruta)
-            except ValueError as exc:
-                QMessageBox.warning(self, "Marca de agua", str(exc))
-        if ultima is not None:
-            self._rellenar_marcas(str(ultima))
-
-    def _quitar_marca(self) -> None:
-        ruta = self.combo_marca.currentData()
-        if ruta in (marcas.MEZQUITA, marcas.NINGUNA):
-            return
-        if QMessageBox.question(self, "Marca de agua",
-                                f"¿Quitar el logotipo «{Path(ruta).stem}» de la lista?") != QMessageBox.Yes:
-            return
-        marcas.quitar(ruta)
-        self._rellenar_marcas(marcas.MEZQUITA)
-
     # --- Aceptar ------------------------------------------------------------
     def _aceptar(self) -> None:
         if self.boton_archivo.isChecked():
@@ -821,7 +767,6 @@ class DialogoFirmaDigital(QDialog):
         self.ajustes.setValue("firma/lugar", self.campo_lugar.text())
         self.ajustes.setValue("firma/contacto", self.campo_contacto.text())
         self.ajustes.setValue("firma/tsa", self.chk_tsa.isChecked())
-        self.ajustes.setValue("firma/marca", self.combo_marca.currentData())
         self.ajustes.setValue("firma/url_tsa", self.campo_tsa.text())
         self.accept()
 
@@ -833,7 +778,7 @@ class DialogoFirmaDigital(QDialog):
     @property
     def marca(self) -> str | None:
         """"mezquita", la ruta del logotipo elegido o None (sin marca de agua)."""
-        return self.combo_marca.currentData() or None
+        return marcas.elegida()
 
     @property
     def url_tsa(self) -> str | None:

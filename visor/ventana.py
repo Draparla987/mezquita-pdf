@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from . import compartir, mover, sistema, tema
+from . import compartir, marcas, mover, sistema, tema
 from . import firma_digital as fd
 from .combinar import FILTRO as FILTRO_INSERTAR, DialogoCombinar, abrir_archivo
 from .componentes import (
@@ -339,10 +339,18 @@ class VentanaPrincipal(QMainWindow):
         a_claude = m.addAction("Conectar con Claude…", self.conectar_claude)
         tema.poner_icono(a_claude, "creation")
 
+        # La marca de agua se elige una vez aquí y vale para todas las firmas con certificado
+        self.menu_marca = QMenu("Marca de agua del sello", self)
+        self.menu_marca.aboutToShow.connect(self._rellenar_menu_marca)
         self.menu_firmar = mb.addMenu("&Firmar")
         for a in (self.a_mis_firmas, self.a_gestionar_firmas, None, self.a_firma_digital,
-                  self.a_firma_invisible, None, self.a_verificar):
-            self.menu_firmar.addSeparator() if a is None else self.menu_firmar.addAction(a)
+                  self.a_firma_invisible, self.menu_marca, None, self.a_verificar):
+            if a is None:
+                self.menu_firmar.addSeparator()
+            elif isinstance(a, QMenu):
+                self.menu_firmar.addMenu(a)
+            else:
+                self.menu_firmar.addAction(a)
 
         m = mb.addMenu("Ay&uda")
         self.a_predeterminada = m.addAction("Usar Mezquita PDF como app predeterminada para PDF",
@@ -1617,6 +1625,50 @@ class VentanaPrincipal(QMainWindow):
         self.vista._modificado(indice)
         self.set_herramienta(Herramienta.SELECCIONAR)
         self.aviso(teclas("Firma colocada. Guarda el documento para conservarla (⌘S)."), 8)
+
+    def _rellenar_menu_marca(self) -> None:
+        m = self.menu_marca
+        m.clear()
+        actual = marcas.elegida() or marcas.NINGUNA
+        grupo = QActionGroup(m)
+        # Sin iconos: con icono, Qt lo dibuja en lugar de la marca ✓ y no se ve cuál está elegida
+        for valor in (marcas.MEZQUITA, *(str(ruta) for ruta in marcas.guardadas()), marcas.NINGUNA):
+            a = m.addAction(marcas.nombre(valor))
+            a.setCheckable(True)
+            a.setChecked(valor == actual)
+            grupo.addAction(a)
+            a.triggered.connect(lambda _=False, v=valor: self._elegir_marca(v))
+        m.addSeparator()
+        m.addAction("Añadir logotipo…", self._anadir_marca)
+        quitar = m.addAction("Quitar el logotipo elegido", self._quitar_marca)
+        quitar.setEnabled(actual not in (marcas.MEZQUITA, marcas.NINGUNA))
+
+    def _elegir_marca(self, marca: str | None) -> None:
+        marcas.elegir(marca)
+        self.aviso(f"Marca de agua de las firmas: {marcas.nombre(marca or None)}")
+
+    def _anadir_marca(self) -> None:
+        rutas, _ = QFileDialog.getOpenFileNames(self, "Añadir logotipo como marca de agua", str(Path.home()),
+                                                marcas.FILTRO)
+        ultima = None
+        for ruta in rutas:
+            try:
+                ultima = marcas.anadir(ruta)
+            except ValueError as exc:
+                QMessageBox.warning(self, "Marca de agua", str(exc))
+        if ultima is not None:
+            self._elegir_marca(str(ultima))
+
+    def _quitar_marca(self) -> None:
+        actual = marcas.elegida()
+        if actual in (marcas.MEZQUITA, None):
+            return
+        if QMessageBox.question(self, "Marca de agua",
+                                f"¿Quitar el logotipo «{marcas.nombre(actual)}»? Las firmas volverán a llevar "
+                                "el arco de Mezquita PDF.") != QMessageBox.Yes:
+            return
+        marcas.quitar(actual)
+        self._elegir_marca(marcas.MEZQUITA)
 
     def iniciar_firma_digital(self) -> None:
         self.set_herramienta(Herramienta.FIRMA_DIGITAL)

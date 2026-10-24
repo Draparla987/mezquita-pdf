@@ -126,18 +126,25 @@ sellos = {m: fd.componer_sello(ancho_pt=200, alto_pt=80, titular="PRUEBA", motiv
 assert len(set(sellos.values())) == 3, "cada marca de agua debe cambiar el sello"
 con_logo = fd.firmar_pdf(datos, firmante, pagina=0, caja=(330, 50, 560, 120), marca=str(ruta_logo))
 assert fd.verificar_firmas(con_logo)[0].integra
+# La marca se elige una vez en Firmar → Marca de agua del sello; la ventana de firma no pregunta
 llavero.listar_certificados = lambda *a, **k: []  # sin leer el Llavero de nadie
 from PySide6.QtCore import QSettings  # noqa: E402
 QSettings().setValue("firma/marca", "Mi organización")  # por nombre, como el instalador de una edición
-dlg = DialogoFirmaDigital(None)
-assert dlg.marca == str(ruta_logo), dlg.marca
-assert [dlg.combo_marca.itemText(i) for i in range(dlg.combo_marca.count())] == [
-    "Arco de Mezquita PDF", "Mi organización", "Sin marca de agua"]
-dlg.combo_marca.setCurrentIndex(1)
-assert dlg.marca == str(ruta_logo) and dlg.boton_quitar_marca.isEnabled()
-dlg.combo_marca.setCurrentIndex(2)
-assert dlg.marca is None and not dlg.boton_quitar_marca.isEnabled()
+assert marcas.elegida() == str(ruta_logo), marcas.elegida()
+v = VentanaPrincipal()
+v._rellenar_menu_marca()
+opciones = [a for a in v.menu_marca.actions() if a.isCheckable()]
+assert [(a.text(), a.isChecked()) for a in opciones] == [
+    ("Arco de Mezquita PDF", False), ("Mi organización", True), ("Sin marca de agua", False)]
+dlg = DialogoFirmaDigital(v)
+assert dlg.marca == str(ruta_logo) and "Mi organización" in dlg.etiqueta_marca.text()
 dlg.close()
+opciones[2].trigger()
+assert marcas.elegida() is None and DialogoFirmaDigital(v).marca is None
+v._rellenar_menu_marca()
+next(a for a in v.menu_marca.actions() if a.text() == "Arco de Mezquita PDF").trigger()
+assert marcas.elegida() == marcas.MEZQUITA
+v.close()
 marcas.quitar(ruta_logo)
 assert marcas.guardadas() == []
 

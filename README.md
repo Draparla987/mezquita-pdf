@@ -108,11 +108,12 @@ tarjetas como el DNIe si macOS las reconoce con su lector).
 La clave privada **nunca sale del Llavero**: es macOS quien realiza la operación de firma.
 Como alternativa, el botón *Usar un archivo de certificado (.p12 / .pfx)* sigue disponible.
 
-**Marca de agua del sello.** De fondo, muy suave, el sello lleva el arco de la Mezquita. En
-*Opciones → Marca de agua* puedes elegir otro: pulsa **Añadir logotipo…** y elige el de tu
-organización (PNG o JPG; el fondo blanco se quita solo y la intensidad se ajusta para que no
-tape el texto). Los logotipos se guardan en la carpeta de datos de la app (`marcas`), así que
-las actualizaciones no los tocan. También puedes elegir *Sin marca de agua*.
+**Marca de agua del sello.** De fondo, muy suave, el sello lleva el arco de la Mezquita. Se
+elige una sola vez en **Firmar → Marca de agua del sello** y vale para todas las firmas (la
+ventana de firma no pregunta, solo indica cuál se usará). Con **Añadir logotipo…** puedes usar
+el de tu organización (PNG o JPG; el fondo blanco se quita solo y la intensidad se ajusta para
+que no tape el texto). Los logotipos se guardan en la carpeta de datos de la app (`marcas`), así
+que las actualizaciones no los tocan. También puedes elegir *Sin marca de agua*.
 
 Para probarlo sin tu certificado real usa `ejemplos/certificado_prueba.p12` (contraseña `1234`).
 Es un certificado de prueba autofirmado: la firma será íntegra, pero aparecerá como
