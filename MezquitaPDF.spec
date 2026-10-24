@@ -40,7 +40,7 @@ else:
         bundle_identifier="local.mezquitapdf.app",
         info_plist={
             "CFBundleDisplayName": "Mezquita PDF",
-            "CFBundleShortVersionString": "2.9.0",
+            "CFBundleShortVersionString": "2.10.0",
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,
             "LSMinimumSystemVersion": "11.0",

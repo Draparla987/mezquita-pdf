@@ -1761,7 +1761,44 @@ class VentanaPrincipal(QMainWindow):
             resultados = fd.verificar_firmas(datos)
         finally:
             QApplication.restoreOverrideCursor()
-        DialogoVerificacion(resultados, self).exec()
+        dlg = DialogoVerificacion(resultados, self, quitar=True)
+        dlg.exec()
+        if dlg.quitar_indice is not None:
+            self._quitar_firma(datos, dlg.quitar_indice)
+
+    def _quitar_firma(self, datos: bytes, indice: int) -> None:
+        """Guarda (en un archivo nuevo) el documento tal como estaba antes de esa firma y lo abre."""
+        try:
+            anterior = fd.version_sin_firma(datos, indice)
+        except fd.ErrorFirma as exc:
+            QMessageBox.warning(self, "Quitar la firma", str(exc))
+            return
+        base = Path(self.documento.ruta)
+        nombre = base.stem.removesuffix("_firmado") + "_sin_firma.pdf"
+        destino, _ = QFileDialog.getSaveFileName(self, "Guardar el documento sin la firma",
+                                                 str(base.with_name(nombre)), FILTRO_PDF)
+        if not destino:
+            return
+        if not destino.lower().endswith(".pdf"):
+            destino += ".pdf"
+        try:
+            tmp = destino + ".tmp"
+            with open(tmp, "wb") as fh:
+                fh.write(anterior)
+            os.replace(tmp, destino)
+        except OSError as exc:
+            QMessageBox.critical(self, "Quitar la firma", f"No se pudo guardar el archivo:\n{exc}")
+            return
+        if os.path.abspath(destino) == os.path.abspath(base):  # ha elegido sustituir el firmado
+            self.documento.reabrir(destino)
+            self.vista.recargar()
+            self._cargar_panel_lateral()
+            self._comprobar_firmas()
+            self._actualizar_estado_ui()
+            self.aviso("Firma quitada: este es el documento tal como estaba antes de firmarlo.", 6)
+        else:  # el firmado sigue abierto aquí y el nuevo, en otra ventana
+            abrir_en_ventana(destino)
+            self.aviso("Firma quitada: el documento sin ella se ha abierto en otra ventana.", 6)
 
     # ------------------------------------------------------------------
     # Compartir

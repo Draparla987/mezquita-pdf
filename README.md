@@ -108,6 +108,12 @@ tarjetas como el DNIe si macOS las reconoce con su lector).
 La clave privada **nunca sale del Llavero**: es macOS quien realiza la operación de firma.
 Como alternativa, el botón *Usar un archivo de certificado (.p12 / .pfx)* sigue disponible.
 
+**Quitar una firma.** En **Firmar → Verificar firmas…** (o *Ver firmas*, en el aviso verde de
+un documento firmado) elige la firma y pulsa **Quitar la firma…**: se guarda en un archivo nuevo
+el documento tal como estaba justo antes de esa firma, idéntico, porque cada firma se añade al
+final del PDF sin tocar lo anterior. Si después hubo otras firmas, también desaparecen (se
+hicieron sobre el documento ya firmado); la app lo avisa antes. El archivo firmado no se toca.
+
 **Marca de agua del sello.** De fondo, muy suave, el sello lleva el arco de la Mezquita. Se
 elige una sola vez en **Firmar → Marca de agua del sello** y vale para todas las firmas (la
 ventana de firma no pregunta, solo indica cuál se usará). Con **Añadir logotipo…** puedes usar

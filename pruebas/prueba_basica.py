@@ -49,6 +49,17 @@ assert len(resultados) == 1 and resultados[0].integra and resultados[0].cubre_to
 firmado2 = fd.firmar_pdf(firmado, firmante)
 assert [r.integra for r in fd.verificar_firmas(firmado2)] == [True, True]
 
+# 3b. Quitar firmas: vuelve el documento de antes de cada una, idéntico
+assert fd.version_sin_firma(firmado2, 1) == firmado, "sin la 2.ª firma debe quedar el documento con la 1.ª"
+assert fd.version_sin_firma(firmado2, 0).rstrip() == datos.rstrip(), "sin la 1.ª no queda ninguna"
+assert [r.integra for r in fd.verificar_firmas(fd.version_sin_firma(firmado2, 1))] == [True]
+assert fd.verificar_firmas(fd.version_sin_firma(firmado, 0)) == []
+try:
+    fd.version_sin_firma(firmado, 3)
+    raise AssertionError("una firma que no existe debe dar error")
+except fd.ErrorFirma:
+    pass
+
 # 4. La ventana principal se construye y abre el documento
 v = VentanaPrincipal()
 assert v.abrir_ruta(str(TMP / "anotado.pdf"))
@@ -147,6 +158,17 @@ assert marcas.elegida() == marcas.MEZQUITA
 v.close()
 marcas.quitar(ruta_logo)
 assert marcas.guardadas() == []
+
+# 9. «Quitar la firma» en la ventana de firmas: se elige la firma y se pregunta antes
+from visor.dialogos import DialogoVerificacion  # noqa: E402
+dlg = DialogoVerificacion(fd.verificar_firmas(firmado2), None, quitar=True)
+assert dlg._indice() == 1 and dlg.boton_quitar.isEnabled()  # de entrada, la última
+dlg.arbol.setCurrentItem(dlg.arbol.topLevelItem(0).child(1))  # un detalle de la primera
+preguntas = []
+dlg._confirmar = lambda pregunta, detalle: preguntas.append(detalle) is None  # responde que sí
+dlg.boton_quitar.click()
+assert dlg.quitar_indice == 0 and "desaparecerá la firma posterior" in preguntas[0], (dlg.quitar_indice, preguntas)
+assert not hasattr(DialogoVerificacion(fd.verificar_firmas(firmado), None), "boton_quitar")
 
 shutil.rmtree(TMP, ignore_errors=True)
 print("✅ Prueba básica superada")

@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QTabWidget,
+    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QSpinBox, QTabWidget,
     QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -786,10 +786,15 @@ class DialogoFirmaDigital(QDialog):
 
 
 class DialogoVerificacion(QDialog):
-    def __init__(self, resultados: list[fd.ResultadoVerificacion], parent=None):
+    """Las firmas del documento. Con `quitar`, permite elegir una para quitarla: al cerrarse,
+    `quitar_indice` dice cuál (quien lo abre guarda la versión de antes de esa firma)."""
+
+    def __init__(self, resultados: list[fd.ResultadoVerificacion], parent=None, quitar: bool = False):
         super().__init__(parent)
         self.setWindowTitle("Firmas del documento")
         self.resize(640, 380)
+        self.resultados = resultados
+        self.quitar_indice: int | None = None
         capa = QVBoxLayout(self)
         if not resultados:
             capa.addWidget(QLabel("Este documento no contiene firmas digitales."))
@@ -818,9 +823,51 @@ class DialogoVerificacion(QDialog):
             raiz.setExpanded(True)
         if resultados:
             capa.addWidget(arbol)
+        self.arbol = arbol
         botones = QDialogButtonBox(QDialogButtonBox.Close)
+        botones.button(QDialogButtonBox.Close).setText("Cerrar")
         botones.rejected.connect(self.reject)
+        if quitar and resultados:
+            self.boton_quitar = botones.addButton("Quitar la firma…", QDialogButtonBox.ActionRole)
+            self.boton_quitar.setToolTip("Guarda una copia del documento tal como estaba antes de esta firma")
+            self.boton_quitar.clicked.connect(self._quitar)
+            arbol.currentItemChanged.connect(lambda *_: self.boton_quitar.setEnabled(self._indice() is not None))
+            arbol.setCurrentItem(arbol.topLevelItem(len(resultados) - 1))  # la última, la más habitual
         capa.addWidget(botones)
+
+    def _indice(self) -> int | None:
+        item = self.arbol.currentItem()
+        while item is not None and item.parent() is not None:
+            item = item.parent()
+        return None if item is None else self.arbol.indexOfTopLevelItem(item)
+
+    def _quitar(self) -> None:
+        i = self._indice()
+        if i is None:
+            return
+        posteriores = len(self.resultados) - i - 1
+        detalle = ("Se guardará en un archivo nuevo el documento tal como estaba justo antes de esta firma. "
+                   "El documento firmado no se toca.")
+        if posteriores == 1:
+            detalle += "\n\nTambién desaparecerá la firma posterior, porque se hizo sobre el documento ya firmado."
+        elif posteriores > 1:
+            detalle += (f"\n\nTambién desaparecerán las {posteriores} firmas posteriores, porque se hicieron "
+                        "sobre el documento ya firmado.")
+        if self._confirmar(f"¿Quitar la firma de {self.resultados[i].firmante}?", detalle):
+            self.quitar_indice = i
+            self.accept()
+
+    def _confirmar(self, pregunta: str, detalle: str) -> bool:
+        caja = QMessageBox(QMessageBox.Question, "Quitar la firma", pregunta, parent=self)
+        caja.setInformativeText(detalle)
+        rejilla = caja.layout()  # más ancha que la de serie (QMessageBox no hace caso a setMinimumWidth)
+        rejilla.addItem(QSpacerItem(420, 0, QSizePolicy.Minimum, QSizePolicy.Expanding),
+                        rejilla.rowCount(), 0, 1, rejilla.columnCount())
+        quitar = caja.addButton("Quitar la firma", QMessageBox.AcceptRole)
+        caja.addButton("Cancelar", QMessageBox.RejectRole)
+        caja.setDefaultButton(quitar)
+        caja.exec()
+        return caja.clickedButton() is quitar
 
 
 class DialogoContrasena(QDialog):

@@ -391,6 +391,41 @@ class ResultadoVerificacion:
     resumen: str
 
 
+def version_sin_firma(pdf_bytes: bytes, indice: int) -> bytes:
+    """El documento tal como estaba justo antes de la firma número `indice` (en el orden de
+    verificar_firmas). Esa firma y las posteriores desaparecen; lo anterior queda idéntico, byte a
+    byte, porque cada firma se añade al final del archivo sin tocar lo que ya había."""
+    reader = PdfFileReader(io.BytesIO(pdf_bytes), strict=False)
+    firmas = list(reader.embedded_regular_signatures)
+    if not 0 <= indice < len(firmas):
+        raise ErrorFirma("No existe esa firma en el documento.")
+    firma = firmas[indice]
+    revision = firma.signed_revision
+    if revision == 0:
+        raise ErrorFirma("Esta firma forma parte del documento desde que se creó: no hay una versión "
+                         "anterior sin ella.")
+    # La versión anterior acaba en el último «%%EOF» antes de la firma (más su salto de línea)
+    fin = pdf_bytes.rfind(b"%%EOF", 0, firma.byte_range[1])
+    if fin < 0:
+        raise ErrorFirma("No se ha encontrado la versión del documento anterior a la firma.")
+    fin += 5
+    if pdf_bytes[fin:fin + 2] == b"\r\n":
+        fin += 2
+    elif pdf_bytes[fin:fin + 1] in (b"\r", b"\n"):
+        fin += 1
+    anterior = pdf_bytes[:fin]
+    try:
+        comprobacion = PdfFileReader(io.BytesIO(anterior), strict=False)
+        quedan = len(list(comprobacion.embedded_regular_signatures))
+        correcto = comprobacion.xrefs.total_revisions == revision and quedan == sum(
+            f.signed_revision < revision for f in firmas)
+    except Exception:
+        correcto = False
+    if not correcto:
+        raise ErrorFirma("No se ha podido recuperar la versión del documento anterior a la firma.")
+    return anterior
+
+
 def verificar_firmas(pdf_bytes: bytes) -> list[ResultadoVerificacion]:
     reader = PdfFileReader(io.BytesIO(pdf_bytes), strict=False)
     resultados = []
