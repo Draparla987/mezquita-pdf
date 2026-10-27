@@ -51,6 +51,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python pruebas/prueba_mover.py
 
+      - name: Extensión de Chrome (código fuente)
+        run: python pruebas/prueba_chrome.py
+
       - name: Certificados de prueba en el almacén de Windows
         shell: pwsh
         run: |
@@ -101,6 +104,13 @@ jobs:
           & "$app\mezquita-mcp.exe" --diagnostico
           python pruebas/prueba_mcp_exe.py "$app\mezquita-mcp.exe" --estado
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Extensión de Chrome: mensajes con el programa instalado y registro en Chrome y Edge
+          python pruebas/prueba_chrome.py "$app\mezquita-mcp.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$app\mezquita-mcp.exe" --registrar-chrome
+          $json = (Get-ItemProperty 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\es.mezquitapdf.chrome').'(default)'
+          $host_chrome = Get-Content $json -Raw | ConvertFrom-Json
+          if ($host_chrome.path -ne "$app\mezquita-mcp.exe") { throw "Registro de Chrome: '$($host_chrome.path)'" }
           Stop-Process -Name 'Mezquita PDF' -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
           Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait
@@ -113,6 +123,11 @@ jobs:
         with:
           name: MezquitaPDF-windows
           path: dist/MezquitaPDF-windows.exe
+
+      # La extensión de Chrome, en un .zip para cargarla en Chrome (modo desarrollador)
+      - name: Empaquetar la extensión de Chrome
+        shell: pwsh
+        run: Compress-Archive -Path extension_chrome\* -DestinationPath dist\MezquitaPDF-extension-chrome.zip
 
       # Edición del IMIBIC: el mismo programa con sus logotipos para la marca de agua del sello.
       # Los logotipos vienen de secretos del repositorio (no están en el código) y el instalador solo
@@ -156,4 +171,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/MezquitaPDF-windows.exe
+          files: |
+            dist/MezquitaPDF-windows.exe
+            dist/MezquitaPDF-extension-chrome.zip

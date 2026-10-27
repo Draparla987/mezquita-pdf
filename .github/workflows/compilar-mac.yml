@@ -63,6 +63,9 @@ jobs:
           "dist/Mezquita PDF.app/Contents/MacOS/Mezquita PDF" --diagnostico | tee diagnostico.txt
           grep -q "Mezquita PDF $(python -c 'import sys; sys.path.insert(0, "visor"); import version; print(version.VERSION)')" diagnostico.txt
 
+      - name: Extensión de Chrome (con la app ya empaquetada)
+        run: python pruebas/prueba_chrome.py "dist/Mezquita PDF.app/Contents/MacOS/Mezquita PDF"
+
       - name: Firma ad hoc y DMG
         run: |
           codesign --force --deep --sign - "dist/Mezquita PDF.app"

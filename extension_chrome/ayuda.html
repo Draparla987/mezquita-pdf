@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firmar con Mezquita PDF</title>
+<style>
+  :root {
+    --fondo: #FBF8F4; --superficie: #FFFFFF; --borde: #E8DFD3; --texto: #2A2220; --suave: #6E625A;
+    --granate: #8E1B2C; --aviso: #FBF1DD; --aviso-borde: #E7CF9E;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #1A1716; --superficie: #2A2523; --borde: #39322F; --texto: #F1EAE3; --suave: #B4A89F;
+      --granate: #D2566A; --aviso: #302820; --aviso-borde: #5C4B33;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 40px 20px 56px; display: grid; gap: 22px; }
+  header { display: flex; align-items: center; gap: 14px; }
+  header img { width: 52px; height: 52px; }
+  h1 { font-size: 1.6rem; line-height: 1.15; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: 1.12rem; margin: 0 0 6px; }
+  p { margin: 0; }
+  .suave { color: var(--suave); }
+  .problema { background: var(--aviso); border: 1px solid var(--aviso-borde); border-radius: 14px; padding: 18px 20px; display: grid; gap: 8px; }
+  .detalle { font: .82rem/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--suave); }
+  section { background: var(--superficie); border: 1px solid var(--borde); border-radius: 14px; padding: 18px 20px; }
+  ol { margin: 6px 0 0; padding-left: 1.3em; display: grid; gap: 6px; }
+  li::marker { color: var(--granate); font-weight: 700; }
+  kbd { font: 600 .85em/1 inherit; padding: 2px 6px 3px; border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 6px; }
+  a { color: var(--granate); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="iconos/128.png" alt="">
+    <h1>Firmar con Mezquita PDF</h1>
+  </header>
+
+  <div class="problema" id="problema" hidden>
+    <h2 id="problema-titulo"></h2>
+    <p id="problema-texto"></p>
+    <p class="detalle" id="problema-detalle" hidden></p>
+  </div>
+
+  <section>
+    <h2>Cómo se usa</h2>
+    <ol>
+      <li>Abre el PDF en Chrome, o en Google Drive en su propia pestaña.</li>
+      <li>Pulsa el botón de Mezquita PDF de la barra de Chrome (o <kbd id="atajo">Alt+Mayús+F</kbd>).</li>
+      <li>El PDF se abre en Mezquita PDF, listo para firmarlo con tu certificado o a mano.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Dónde queda el documento</h2>
+    <p class="suave">Se guarda en la carpeta <strong>Descargas › Mezquita PDF</strong>. Al firmarlo, Mezquita PDF te
+      propone guardar el firmado junto a él.</p>
+  </section>
+
+  <section>
+    <h2>Lo que necesitas</h2>
+    <p class="suave">Mezquita PDF 2.11 o posterior instalado en este ordenador y abierto al menos una vez: al abrirse,
+      se conecta con Chrome. <a href="https://github.com/Draparla987/mezquita-pdf/releases/latest" target="_blank" rel="noopener">Descargar Mezquita PDF</a></p>
+  </section>
+</main>
+<script src="ayuda.js"></script>
+</body>
+</html>

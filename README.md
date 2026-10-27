@@ -166,6 +166,25 @@ con…» o «une estos PDF de Descargas».
 - El enlace entre las dos apps es un socket local accesible solo para tu usuario. Se puede
   desactivar en la misma ventana.
 
+## Extensión de Chrome: firmar lo que estás viendo en el navegador
+
+La extensión **Firmar con Mezquita PDF** (carpeta `extension_chrome/`) añade un botón a Chrome
+(y a Edge o Brave). Con un PDF abierto en el navegador, o un archivo de Google Drive en su propia
+pestaña, pulsa el botón (o ⌥⇧F / Alt+Mayús+F): el PDF se guarda en **Descargas › Mezquita PDF** y
+se abre en la app, listo para firmar. La firma la hace la app, con el certificado del ordenador:
+el navegador no tiene acceso a él.
+
+Para instalarla (de momento, en modo desarrollador):
+
+1. Descarga `MezquitaPDF-extension-chrome.zip` de la [última versión](https://github.com/Draparla987/mezquita-pdf/releases/latest)
+   y descomprímelo en una carpeta que no vayas a borrar.
+2. En Chrome, abre `chrome://extensions`, activa **Modo de desarrollador** (arriba a la derecha) y
+   pulsa **Cargar descomprimida**. Elige esa carpeta.
+3. Abre Mezquita PDF (2.11 o posterior) una vez: al abrirse se conecta con Chrome.
+
+La extensión y la app se comunican con la mensajería nativa de Chrome, sin pasar por internet,
+y la app solo acepta mensajes de esta extensión (su identificador es fijo).
+
 ## Limitaciones conocidas
 
 - **Editar texto** sustituye la línea con una fuente estándar (Helvetica, Times o Courier),
@@ -221,6 +240,8 @@ visor/documento.py      Documento PDF con deshacer/rehacer y guardado incrementa
 visor/dialogos.py       Diálogos (texto, firmas manuscritas, certificado, verificación)
 visor/firma_digital.py  Firma PAdES y verificación (pyHanko)
 visor/marcas.py         Logotipos propios para la marca de agua del sello
+visor/chrome.py         Lo que hace la app cuando la llama la extensión de Chrome, y su registro
+extension_chrome/       Extensión de Chrome «Firmar con Mezquita PDF»
 visor/llavero.py        Certificados del Llavero de macOS y firma sin exportar la clave
 visor/compartir.py      Correo, WhatsApp y servicios de compartir de macOS
 visor/tema.py           Paleta, estilos, iconos y logotipo (arco de la Mezquita)

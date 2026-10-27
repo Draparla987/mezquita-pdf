@@ -7,6 +7,17 @@ if __name__ == "__main__" and "--mcp" in sys.argv:
     from visor.mcp_servidor import main as servidor_mcp
     sys.exit(servidor_mcp())
 
+if __name__ == "__main__" and any(a.startswith("chrome-extension://") for a in sys.argv[1:]):
+    # Extensión de Chrome: Chrome arranca la app para pasarle un PDF, sin ventanas ni Qt
+    # (ver visor/chrome.py)
+    from visor.chrome import main as anfitrion_chrome
+    sys.exit(anfitrion_chrome())
+
+if __name__ == "__main__" and "--registrar-chrome" in sys.argv:
+    from visor import chrome
+    print("Extensión de Chrome registrada en: " + (", ".join(chrome.registrar()) or "ningún navegador"))
+    sys.exit(0)
+
 from PySide6.QtCore import QEvent, QSettings, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QApplication
@@ -114,6 +125,11 @@ def main() -> int:
         app._traductor = traductor  # que no lo libere el recolector
     app.setWindowIcon(QIcon(QPixmap.fromImage(tema.imagen_icono_app(512))))
     migrar_ajustes()
+    try:
+        from visor import chrome
+        chrome.registrar()  # para que la extensión de Chrome «Firmar con Mezquita PDF» encuentre la app
+    except Exception:
+        pass
     tema.aplicar_tema(app)
     from visor import puente_claude
     puente_claude.iniciar(app)  # para que Claude pueda trabajar con los documentos abiertos

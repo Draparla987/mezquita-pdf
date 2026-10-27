@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Firmar con Mezquita PDF",
+  "short_name": "Mezquita PDF",
+  "version": "1.0.0",
+  "description": "Abre en Mezquita PDF el PDF que estás viendo en Chrome o en Google Drive, listo para firmarlo con tu certificado o a mano.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAo7mFtx2dHzDhVexBXxkRHzRnwQbBelO5jcSGwkwsC1NsJHZ4oprJi9flyNQxJ/u5ZWJi3Y+5TUlJk9Esv66rfaBzb7aQy2MU0HeyPMPrkK98y06jXWQ9DUxd5IfxT9uRjW5lMciSR5EYhfbtMiwBYReyQJcMvqRooWJpXRJkBJwMuf+Ckzm49qMYAWlX40P+sfYd4je6uLSpsJYQiFngN2TiccNojTUwLwbxzLOOA69goBVnX1kBuDR4Qv9Nmexrd9ouB875fgusn1qc/IyqBOiYliVASEvRbHiRMwBrpuYeH4oasOS52vjGGuDdfUfJlXwU4mkNjZ8l/DWyZBtlTQIDAQAB",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "iconos/16.png",
+    "32": "iconos/32.png",
+    "48": "iconos/48.png",
+    "128": "iconos/128.png"
+  },
+  "action": {
+    "default_title": "Firmar con Mezquita PDF",
+    "default_icon": {
+      "16": "iconos/16.png",
+      "32": "iconos/32.png"
+    }
+  },
+  "background": {
+    "service_worker": "fondo.js"
+  },
+  "permissions": ["activeTab", "nativeMessaging"],
+  "host_permissions": [
+    "https://drive.google.com/*",
+    "https://drive.usercontent.google.com/*",
+    "https://docs.google.com/*"
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+F" },
+      "description": "Abrir el PDF en Mezquita PDF"
+    }
+  }
+}

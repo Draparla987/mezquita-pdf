@@ -62,6 +62,11 @@ Name: "{autoprograms}\Mezquita PDF"; Filename: "{app}\Mezquita PDF.exe"; AppUser
 Name: "{autodesktop}\Mezquita PDF"; Filename: "{app}\Mezquita PDF.exe"; Tasks: escritorio; AppUserModelID: "MezquitaPDF.App"
 
 [Registry]
+; Extensión de Chrome «Firmar con Mezquita PDF»: la app escribe el manifiesto al abrirse; aquí se
+; registra para que el desinstalador lo quite
+Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\es.mezquitapdf.chrome"; ValueType: string; ValueName: ""; ValueData: "{userappdata}\MezquitaPDF\chrome\es.mezquitapdf.chrome.json"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts\es.mezquitapdf.chrome"; ValueType: string; ValueName: ""; ValueData: "{userappdata}\MezquitaPDF\chrome\es.mezquitapdf.chrome.json"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\es.mezquitapdf.chrome"; ValueType: string; ValueName: ""; ValueData: "{userappdata}\MezquitaPDF\chrome\es.mezquitapdf.chrome.json"; Flags: uninsdeletekey
 #ifdef MarcaPorDefecto
 ; Marca de agua elegida de entrada (solo si el usuario no ha elegido otra)
 Root: HKCU; Subkey: "Software\MezquitaPDF\Mezquita PDF\firma"; ValueType: string; ValueName: "marca"; ValueData: "{#MarcaPorDefecto}"; Flags: createvalueifdoesntexist
