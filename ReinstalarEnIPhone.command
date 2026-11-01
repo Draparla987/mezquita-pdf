@@ -42,7 +42,8 @@ except Exception:
     sys.exit()
 for x in d.get("result", {}).get("devices", []):
     hw, c = x.get("hardwareProperties", {}), x.get("connectionProperties", {})
-    if hw.get("reality") == "physical" and hw.get("platform") == "iOS" and c.get("pairingState") == "paired":
+    # Xcode 27 ya no marca los dispositivos reales como «physical»: basta con que no sea un simulador
+    if hw.get("reality") != "simulated" and hw.get("platform") == "iOS" and c.get("pairingState") == "paired":
         print(hw.get("udid", "")); break
 PY
 )"
