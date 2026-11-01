@@ -41,6 +41,10 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Mezquita PDF usa la cámara para hacer fotos de documentos (por ejemplo, un DNI o un escaneo) y añadirlas a un PDF.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Mezquita PDF usa tus fotos para añadirlas a un PDF o como imagen de tu firma, solo las que elijas.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
