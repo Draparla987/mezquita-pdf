@@ -148,8 +148,9 @@ def hoja_estilos(p: Paleta) -> str:
                              padding: 7px 10px 7px 12px; margin: 0 2px 0 0;
                              min-width: 110px; max-width: 230px; }}
     QTabBar#pestanas::tab:hover:!selected {{ background: {_rgba(p.texto, 0.06)}; color: {p.texto}; }}
-    QTabBar#pestanas::tab:selected {{ background: {p.superficie}; color: {p.texto}; font-weight: 600;
+    QTabBar#pestanas::tab:selected {{ background: {p.superficie}; color: {p.texto};
                                       border-color: {p.borde}; border-top: 2px solid {p.acento}; }}
+    /* Mismo grosor de letra en todas: Qt mide la pestaña con la letra normal y recortaría el nombre */
     QTabBar#pestanas QToolButton {{ padding: 1px; border-radius: 5px; background: transparent; }}
     QTabBar#pestanas QToolButton:hover {{ background: {_rgba(p.texto, 0.12)}; }}
     QLabel#nota {{ color: {p.texto_suave}; font-size: 12px; }}
