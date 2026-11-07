@@ -32,6 +32,7 @@ app = QApplication([])
 app.setOrganizationName("MezquitaPDFPruebas")
 
 from visor import actualizaciones, llavero, tema  # noqa: E402
+from visor.ajustes import DialogoAjustes  # noqa: E402
 from visor import firma_digital as fd  # noqa: E402
 from visor.combinar import DialogoCombinar  # noqa: E402
 from visor.componentes import DialogoWhatsApp  # noqa: E402
@@ -91,6 +92,7 @@ ventanas = [
     ("contraseña", lambda: DialogoContrasena("documento.pdf", v)),
     ("enviar por WhatsApp", lambda: DialogoWhatsApp(ejemplo, v)),
     ("conectar con Claude", lambda: DialogoClaude(None, v)),
+    ("ajustes", lambda: DialogoAjustes(v)),
     ("actualización", lambda: actualizaciones.DialogoActualizacion(
         actualizaciones.Version("9.9.9", "## Novedades\n" + "- Una novedad\n" * 15, "", "x"), v)),
 ]

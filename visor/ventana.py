@@ -14,14 +14,14 @@ from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
     QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea, QSlider, QSpinBox,
-    QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QStackedWidget, QStyle, QTabBar, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from . import compartir, marcas, mover, sistema, tema
+from . import ajustes, compartir, marcas, mover, sistema, tema
 from . import firma_digital as fd
 from .combinar import FILTRO as FILTRO_INSERTAR, DialogoCombinar, abrir_archivo
 from .componentes import (
-    MARGEN_VENTANA, BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
+    MARGEN_VENTANA, BarraPestanas, BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
     area_disponible, encajar_en_pantalla, separador_vertical,
 )
 from .dialogos import (
@@ -100,6 +100,16 @@ def ventana_activa() -> "VentanaPrincipal | None":
     return next((v for v in reversed(_ventanas) if v.documento is not None), None)
 
 
+def pestana_activa() -> "Pestana | None":
+    """El documento que el usuario tiene delante en la última ventana que usó (para Claude)."""
+    v = ventana_activa()
+    return v.pestana if v else None
+
+
+def todas_las_pestanas() -> list["Pestana"]:
+    return [p for v in _ventanas for p in v.pestanas()]
+
+
 def nueva_ventana(ruta: str | None = None) -> "VentanaPrincipal":
     v = VentanaPrincipal()
     _ventanas.append(v)
@@ -109,18 +119,40 @@ def nueva_ventana(ruta: str | None = None) -> "VentanaPrincipal":
     return v
 
 
-def mostrar_en_ventana(doc: Documento, activar: bool = True) -> "VentanaPrincipal":
-    """Muestra un documento nuevo (aún sin guardar) en una ventana vacía o en una nueva.
+def _ventana_en_uso() -> "VentanaPrincipal | None":
+    if _ultima_activa in _ventanas:
+        return _ultima_activa
+    return _ventanas[-1] if _ventanas else None
 
-    Con `activar=False` (lo que pide Claude) no se le quita el foco a la app que se esté usando.
-    """
-    v = next((v for v in _ventanas if v.documento is None), None) or nueva_ventana()
-    v.mostrar_documento(doc)
+
+def _ventana_destino(preferida: "VentanaPrincipal | None" = None) -> "VentanaPrincipal":
+    """Dónde se abre un documento más: según Ajustes, en una pestaña de la ventana que se está usando
+    (o de `preferida`) o en una ventana aparte, aprovechando una vacía si la hay."""
+    pestanas = ajustes.en_pestanas()
+    if preferida is not None and preferida in _ventanas and (pestanas or preferida.documento is None):
+        return preferida
+    if pestanas and (v := _ventana_en_uso()) is not None:
+        return v
+    return next((v for v in _ventanas if v.documento is None), None) or nueva_ventana()
+
+
+def _traer(v: "VentanaPrincipal", activar: bool) -> None:
+    """Pone la ventana delante. Con `activar=False` (lo que pide Claude) no se le quita el foco a la
+    app que se esté usando."""
+    if v.isMinimized():
+        v.showNormal()
     v.raise_()
     if activar:
         v.activateWindow()
-    else:
-        marcar_activa(v)
+    marcar_activa(v)
+
+
+def mostrar_en_ventana(doc: Documento, activar: bool = True,
+                       preferida: "VentanaPrincipal | None" = None) -> "VentanaPrincipal":
+    """Muestra un documento nuevo (p. ej. uno combinado, aún sin guardar) en una pestaña o ventana."""
+    v = _ventana_destino(preferida)
+    v.mostrar_documento(doc)
+    _traer(v, activar)
     return v
 
 
@@ -129,29 +161,37 @@ def marcar_activa(v: "VentanaPrincipal") -> None:
     _ultima_activa = v
 
 
-def abrir_en_ventana(ruta: str) -> None:
-    """Abre en una ventana vacía si la hay; si no, en una nueva."""
-    for v in _ventanas:
-        if v.documento and v.documento.ruta and os.path.abspath(v.documento.ruta) == os.path.abspath(ruta):
-            v.raise_()
-            v.activateWindow()
-            return
-    for v in _ventanas:
-        if v.documento is None:
-            v.abrir_ruta(ruta)
-            v.raise_()
-            return
-    nueva_ventana(ruta)
+def abrir_en_ventana(ruta: str, preferida: "VentanaPrincipal | None" = None,
+                     activar: bool = True) -> "VentanaPrincipal | None":
+    """Abre un PDF del disco. Si ya está abierto, solo lo muestra. Devuelve la ventana donde queda
+    a la vista (o None si no se ha podido abrir)."""
+    ruta_abs = os.path.abspath(ruta)
+    for p in todas_las_pestanas():
+        if p.documento.ruta and os.path.abspath(p.documento.ruta) == ruta_abs:
+            p.ventana.elegir_pestana(p)
+            _traer(p.ventana, activar)
+            return p.ventana
+    v = _ventana_destino(preferida)
+    if not v.abrir_ruta(ruta):
+        return None
+    _traer(v, activar)
+    return v
 
 
 def _actualizar_automatico(si: bool) -> None:
     """Guarda la opción y la refleja en el menú de todas las ventanas."""
-    QSettings().setValue("actualizaciones/automatico", si)
+    QSettings().setValue(ajustes.ACTUALIZAR, si)
     for v in _ventanas:
         if v.a_auto_actualizar.isChecked() != si:
             v.a_auto_actualizar.blockSignals(True)
             v.a_auto_actualizar.setChecked(si)
             v.a_auto_actualizar.blockSignals(False)
+
+
+def _mostrar_miniaturas(si: bool) -> None:
+    QSettings().setValue(ajustes.PANEL, si)
+    for v in _ventanas:
+        v.panel.setVisible(si)
 
 
 def al_cambiar_tema() -> None:
@@ -177,26 +217,43 @@ class _Puente(QObject):
     resultado = Signal(object)
 
 
+class Pestana:
+    """Un documento abierto en una pestaña: su vista y lo que la ventana recuerda de él al cambiar
+    de pestaña (miniaturas ya pintadas, búsqueda, estado de las firmas…)."""
+
+    def __init__(self, ventana: "VentanaPrincipal", documento: Documento):
+        self.ventana = ventana
+        self.documento = documento
+        self.vista = VistaPDF()
+        self.tenia_firmas = False
+        self.estado_firmas: tuple[bool, str] | None = None  # (todas válidas, texto del aviso)
+        self.miniaturas: dict[int, tuple[QPixmap, QSize]] = {}
+        self.busqueda = ""
+        self.ultima_busqueda: str | None = None
+        self.pagina_inicial = 0
+
+
 class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setUnifiedTitleAndToolBarOnMac(False)
         self.ajustes = QSettings()
-        self.documento: Documento | None = None
-        self.tenia_firmas = False
+        self.pestana: Pestana | None = None
         self.firma_actual: Path | None = None
+        self._ultima_busqueda: str | None = None
         self.setMinimumSize(720, 440)
         encajar_en_pantalla(self, 1320, 880)  # en un portátil, lo que quepa
         self.setAcceptDrops(True)
 
-        self.vista = VistaPDF()
-        self.vista.color = QColor(COLORES_RESALTADO[0])
-        self.vista.color_trazo = QColor(COLORES_TRAZO[1])
+        # Sin documentos se usa esta vista vacía; guarda además los colores y el grosor elegidos,
+        # que heredan las pestañas nuevas
+        self._vista_vacia = VistaPDF()
+        self._vista_vacia.color = QColor(COLORES_RESALTADO[0])
+        self._vista_vacia.color_trazo = QColor(COLORES_TRAZO[1])
         self._crear_acciones()
         self._crear_menus()
         self._crear_interfaz()
-        self._conectar_vista()
         self._actualizar_estado_ui()
         self.restoreGeometry(self.ajustes.value("ventana/geometria", b""))
         area = area_disponible(self)  # p. ej. venía de un monitor grande y ahora está en el portátil
@@ -204,6 +261,22 @@ class VentanaPrincipal(QMainWindow):
             encajar_en_pantalla(self, self.width(), self.height())
             self.move(max(area.left(), min(self.x(), area.right() - self.width())), area.top())
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self._escape)
+
+    # El documento y la vista de la pestaña que se ve (casi todo el código trabaja con ellos)
+    @property
+    def documento(self) -> Documento | None:
+        return self.pestana.documento if self.pestana else None
+
+    @property
+    def vista(self) -> VistaPDF:
+        return self.pestana.vista if self.pestana else self._vista_vacia
+
+    @property
+    def tenia_firmas(self) -> bool:
+        return self.pestana.tenia_firmas if self.pestana else False
+
+    def _todas_las_vistas(self) -> list[VistaPDF]:
+        return [self._vista_vacia, *(p.vista for p in self.pestanas())]
 
     # ------------------------------------------------------------------
     # Acciones y menús
@@ -242,8 +315,8 @@ class VentanaPrincipal(QMainWindow):
         self.a_acercar = A("Acercar", lambda: self.vista.set_zoom(self.vista.zoom * 1.2), QKeySequence.ZoomIn, "plus")
         self.a_alejar = A("Alejar", lambda: self.vista.set_zoom(self.vista.zoom / 1.2), QKeySequence.ZoomOut, "minus")
         self.a_real = A("Tamaño real", lambda: self.vista.set_zoom(1.0), "Ctrl+0")
-        self.a_ancho = A("Ajustar al ancho", self.vista.ajustar_ancho, "Ctrl+2", "arrow-expand-horizontal")
-        self.a_pagina = A("Ajustar página", self.vista.ajustar_pagina, "Ctrl+1", "fit-to-page-outline")
+        self.a_ancho = A("Ajustar al ancho", lambda: self.vista.ajustar_ancho(), "Ctrl+2", "arrow-expand-horizontal")
+        self.a_pagina = A("Ajustar página", lambda: self.vista.ajustar_pagina(), "Ctrl+1", "fit-to-page-outline")
         self.a_primera = A("Primera página", lambda: self.vista.ir_a_pagina(0), "Home")
         self.a_ultima = A("Última página", lambda: self.vista.ir_a_pagina(self.documento.num_paginas - 1) if self.documento else None, "End")
         self.a_anterior = A("Página anterior", lambda: self.vista.ir_a_pagina(self.vista.pagina_actual() - 1), "Left", "chevron-left")
@@ -290,9 +363,29 @@ class VentanaPrincipal(QMainWindow):
             if a not in (self.a_abrir, self.a_cerrar, self.a_gestionar_firmas, self.a_cerrar_doc, self.a_combinar)
         ]
 
+        # Ventanas y pestañas (después de la lista anterior: no dependen de tener un documento)
+        self.a_nueva_ventana = A("Nueva ventana", lambda: _traer(nueva_ventana(), True), QKeySequence.New)
+        self.a_ajustes = A("Ajustes…", self.abrir_ajustes, "Ctrl+,", "cog-outline",
+                           "Opciones por defecto: pestañas o ventanas, zoom, marca de agua…")
+        self.a_ajustes.setMenuRole(QAction.PreferencesRole)
+        self.a_pestana_sig = A("Mostrar la pestaña siguiente", lambda: self._paso_pestana(1))
+        self.a_pestana_ant = A("Mostrar la pestaña anterior", lambda: self._paso_pestana(-1))
+        if ES_MAC:  # ⌃⇥ y ⌃⇧⇥, como en Safari (en Qt, «Meta» es la tecla Control del Mac)
+            self.a_pestana_sig.setShortcuts([QKeySequence("Meta+Tab"), QKeySequence("Ctrl+Shift+]")])
+            self.a_pestana_ant.setShortcuts([QKeySequence("Meta+Shift+Backtab"), QKeySequence("Meta+Shift+Tab"),
+                                             QKeySequence("Ctrl+Shift+[")])
+        else:
+            self.a_pestana_sig.setShortcuts([QKeySequence("Ctrl+Tab"), QKeySequence("Ctrl+PgDown")])
+            self.a_pestana_ant.setShortcuts([QKeySequence("Ctrl+Shift+Backtab"), QKeySequence("Ctrl+Shift+Tab"),
+                                             QKeySequence("Ctrl+PgUp")])
+        self.a_mover_pestana = A("Mover la pestaña a una ventana nueva",
+                                 lambda: self.mover_a_ventana_nueva(self.pestana))
+        self.a_juntar = A("Juntar todas las ventanas en pestañas", self.juntar_ventanas)
+
     def _crear_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu("&Archivo")
+        m.addAction(self.a_nueva_ventana)
         m.addAction(self.a_abrir)
         self.menu_recientes = m.addMenu("Abrir reciente")
         self.menu_recientes.aboutToShow.connect(self._rellenar_recientes)
@@ -315,6 +408,9 @@ class VentanaPrincipal(QMainWindow):
         m = mb.addMenu("&Edición")
         for a in (self.a_deshacer, self.a_rehacer, None, self.a_buscar, self.a_buscar_sig, self.a_buscar_ant):
             m.addSeparator() if a is None else m.addAction(a)
+        if not ES_MAC:  # en el Mac, Qt lo lleva al menú «Mezquita PDF» (⌘,), como en todas las apps
+            m.addSeparator()
+        m.addAction(self.a_ajustes)
 
         m = mb.addMenu("&Ver")
         for a in (self.a_acercar, self.a_alejar, self.a_real, self.a_ancho, self.a_pagina, None,
@@ -352,6 +448,11 @@ class VentanaPrincipal(QMainWindow):
             else:
                 self.menu_firmar.addAction(a)
 
+        self.menu_ventana = mb.addMenu("&Ventana")
+        for a in (self.a_pestana_sig, self.a_pestana_ant, None, self.a_mover_pestana, self.a_juntar):
+            self.menu_ventana.addSeparator() if a is None else self.menu_ventana.addAction(a)
+        self.menu_ventana.aboutToShow.connect(self._actualizar_acciones_pestanas)
+
         m = mb.addMenu("Ay&uda")
         self.a_predeterminada = m.addAction("Usar Mezquita PDF como app predeterminada para PDF",
                                             self.hacer_predeterminada)
@@ -382,7 +483,7 @@ class VentanaPrincipal(QMainWindow):
 
         self.bienvenida = PantallaBienvenida()
         self.bienvenida.abrir_solicitado.connect(self.abrir)
-        self.bienvenida.reciente_solicitado.connect(abrir_en_ventana)
+        self.bienvenida.reciente_solicitado.connect(lambda ruta: abrir_en_ventana(ruta, self))
         self.bienvenida.firmas_solicitado.connect(self.gestionar_firmas)
         self.bienvenida.combinar_solicitado.connect(self.combinar)
         self.pila.addWidget(self.bienvenida)
@@ -392,6 +493,7 @@ class VentanaPrincipal(QMainWindow):
         capa.setContentsMargins(0, 0, 0, 0)
         capa.setSpacing(0)
         capa.addWidget(self._crear_barra_superior())
+        capa.addWidget(self._crear_zona_pestanas())
         cuerpo = QHBoxLayout()
         cuerpo.setContentsMargins(0, 0, 0, 0)
         cuerpo.setSpacing(0)
@@ -406,6 +508,22 @@ class VentanaPrincipal(QMainWindow):
         self._recolocador_raiz = _Recolocador(self.toast.recolocar)
         self.raiz.installEventFilter(self._recolocador_raiz)
         self._mostrar_bienvenida()
+
+    def _crear_zona_pestanas(self) -> QWidget:
+        """Pestañas de los documentos abiertos. Solo se ven con dos o más, como en Safari."""
+        zona = QWidget()
+        zona.setObjectName("zonaPestanas")
+        zona.setAttribute(Qt.WA_StyledBackground, True)
+        capa = QHBoxLayout(zona)
+        capa.setContentsMargins(10, 6, 10, 0)  # el aire de arriba, aquí: así la ✕ queda centrada en la pestaña
+        self.barra_pestanas = BarraPestanas()
+        self.barra_pestanas.currentChanged.connect(self._pestana_elegida)
+        self.barra_pestanas.cerrar_pedido.connect(lambda i: self._cerrar_pestana(self.barra_pestanas.tabData(i)))
+        self.barra_pestanas.customContextMenuRequested.connect(self._menu_pestana)
+        capa.addWidget(self.barra_pestanas, 1)
+        zona.setVisible(False)
+        self.zona_pestanas = zona
+        return zona
 
     def _boton_barra(self, accion: QAction) -> QToolButton:
         b = QToolButton()
@@ -608,7 +726,9 @@ class VentanaPrincipal(QMainWindow):
         capa.setSpacing(0)
         self.banner = self._crear_banner()
         capa.addWidget(self.banner)
-        capa.addWidget(self.vista, 1)
+        self.pila_vistas = QStackedWidget()  # una vista por pestaña
+        self.pila_vistas.addWidget(self._vista_vacia)
+        capa.addWidget(self.pila_vistas, 1)
 
         # Barra flotante de navegación (abajo)
         self.pildora_nav = Pildora(zona)
@@ -689,20 +809,25 @@ class VentanaPrincipal(QMainWindow):
             self.pildora_prop.move((ancho_util - self.pildora_prop.width()) // 2, arriba + 14)
             self.pildora_prop.raise_()
 
-    def _conectar_vista(self) -> None:
-        v = self.vista
-        v.pagina_cambiada.connect(self._pagina_cambiada)
-        v.zoom_cambiado.connect(self._zoom_cambiado)
-        v.documento_modificado.connect(self._doc_modificado)
-        v.mensaje.connect(self.aviso)
-        v.pedir_texto.connect(self._anadir_texto)
-        v.pedir_nota.connect(self._anadir_nota)
-        v.pedir_imagen.connect(self._anadir_imagen)
-        v.pedir_firma_manuscrita.connect(self._colocar_firma)
-        v.pedir_firma_digital.connect(self._firmar_digital)
-        v.pedir_editar_texto.connect(self._editar_linea)
-        v.pedir_campo_formulario.connect(self._editar_campo)
-        v.pedir_editar_anotacion.connect(self._editar_anotacion)
+    def _conectar_vista(self, p: Pestana) -> None:
+        """La ventana solo atiende a la vista de la pestaña que se ve (la barra, las miniaturas… son
+        de esa); de las demás solo le interesa saber si su documento cambia, para marcar la pestaña."""
+        v = p.vista
+
+        def si_se_ve(funcion):
+            return lambda *args: funcion(*args) if self.pestana is p else None
+
+        v.pagina_cambiada.connect(si_se_ve(self._pagina_cambiada))
+        v.zoom_cambiado.connect(si_se_ve(self._zoom_cambiado))
+        v.documento_modificado.connect(lambda: self._doc_modificado(p))
+        v.mensaje.connect(si_se_ve(self.aviso))
+        for senal, funcion in (
+            (v.pedir_texto, self._anadir_texto), (v.pedir_nota, self._anadir_nota),
+            (v.pedir_imagen, self._anadir_imagen), (v.pedir_firma_manuscrita, self._colocar_firma),
+            (v.pedir_firma_digital, self._firmar_digital), (v.pedir_editar_texto, self._editar_linea),
+            (v.pedir_campo_formulario, self._editar_campo), (v.pedir_editar_anotacion, self._editar_anotacion),
+        ):
+            senal.connect(si_se_ve(funcion))
 
     def aviso(self, texto: str, segundos: float = 3.0) -> None:
         self.toast.mostrar(texto, segundos)
@@ -711,12 +836,13 @@ class VentanaPrincipal(QMainWindow):
         tema.refrescar_iconos(self)
         self.logo_barra.setPixmap(tema.pixmap_logo(30))
         self._banner_wrapper_estilo()
-        self._comprobar_firmas()
+        self._pintar_banner()
         self.bienvenida.actualizar_recientes(self._recientes())
         self.bienvenida.update()
         if self.vista.herramienta not in (Herramienta.SELECCIONAR, Herramienta.MANO):
             self._actualizar_pildora_propiedades(self.vista.herramienta)
-        self.vista.contenedor.update()
+        for v in self._todas_las_vistas():
+            v.contenedor.update()
 
     def _banner_wrapper_estilo(self) -> None:
         self.banner.setStyleSheet(f"background: {tema.paleta().lienzo};")
@@ -797,8 +923,16 @@ class VentanaPrincipal(QMainWindow):
             self.a_rehacer.setEnabled(self.documento.puede_rehacer())
             self.spin_pagina.setMaximum(self.documento.num_paginas)
             self.etiqueta_total.setText(f"/ {self.documento.num_paginas}")
+        self._actualizar_acciones_pestanas()
         self._actualizar_titulo()
         QTimer.singleShot(0, self._recolocar_flotantes)
+
+    def _actualizar_acciones_pestanas(self) -> None:
+        varias = self.barra_pestanas.count() > 1
+        self.zona_pestanas.setVisible(varias)
+        for a in (self.a_pestana_sig, self.a_pestana_ant, self.a_mover_pestana):
+            a.setEnabled(varias)
+        self.a_juntar.setEnabled(any(v is not self and v.documento is not None for v in _ventanas))
 
     def _actualizar_titulo(self) -> None:
         if self.documento is None:
@@ -814,8 +948,12 @@ class VentanaPrincipal(QMainWindow):
         fm = self.etiqueta_doc.fontMetrics()
         self.etiqueta_doc.setText(fm.elidedText(texto, Qt.ElideMiddle, 300))
         self.etiqueta_doc.setToolTip(self.documento.ruta or "")
+        self._rotular_pestana(self.pestana)
 
-    def _doc_modificado(self) -> None:
+    def _doc_modificado(self, p: Pestana) -> None:
+        if p is not self.pestana:  # p. ej. Claude ha tocado otro documento: basta con marcar su pestaña
+            self._rotular_pestana(p)
+            return
         self._actualizar_estado_ui()
         self._actualizar_miniatura(self.vista.pagina_actual())
 
@@ -905,7 +1043,8 @@ class VentanaPrincipal(QMainWindow):
             valor.setFixedWidth(34)
 
             def cambiar(v, etiqueta=valor):
-                self.vista.grosor = float(v)
+                for vista in self._todas_las_vistas():
+                    vista.grosor = float(v)
                 etiqueta.setText(f"{v} pt")
             slider.valueChanged.connect(cambiar)
             capa.addWidget(slider)
@@ -934,10 +1073,11 @@ class VentanaPrincipal(QMainWindow):
         QTimer.singleShot(0, self._recolocar_flotantes)
 
     def _elegir_color(self, color: str, resaltado: bool) -> None:
-        if resaltado:
-            self.vista.color = QColor(color)
-        else:
-            self.vista.color_trazo = QColor(color)
+        for v in self._todas_las_vistas():  # vale para todos los documentos de la ventana
+            if resaltado:
+                v.color = QColor(color)
+            else:
+                v.color_trazo = QColor(color)
 
     # ------------------------------------------------------------------
     # Abrir / guardar
@@ -947,9 +1087,10 @@ class VentanaPrincipal(QMainWindow):
         rutas, _ = QFileDialog.getOpenFileNames(self, "Abrir PDF", inicio, FILTRO_PDF)
         for ruta in rutas:
             self.ajustes.setValue("ultima_carpeta", os.path.dirname(ruta))
-            abrir_en_ventana(ruta)
+            abrir_en_ventana(ruta, self)
 
     def abrir_ruta(self, ruta: str) -> bool:
+        """Abre el PDF en una pestaña nueva de esta ventana."""
         try:
             doc = Documento(ruta)
         except Exception as exc:
@@ -967,54 +1108,86 @@ class VentanaPrincipal(QMainWindow):
         self.mostrar_documento(doc)
         return True
 
-    def mostrar_documento(self, doc: Documento) -> None:
-        if self.documento is not None:
-            self.documento.cerrar()
-        self.documento = doc
+    def mostrar_documento(self, doc: Documento, pagina: int = 0) -> None:
+        """Añade el documento en una pestaña nueva y la muestra."""
+        p = Pestana(self, doc)
+        plantilla = self.vista  # colores y grosor que se estén usando en la ventana
+        p.vista.color, p.vista.color_trazo = QColor(plantilla.color), QColor(plantilla.color_trazo)
+        p.vista.grosor = plantilla.grosor
+        p.pagina_inicial = pagina
+        self._conectar_vista(p)
+        self.pila_vistas.addWidget(p.vista)
+        p.vista.set_documento(doc)
+
+        barra = self.barra_pestanas
+        barra.blockSignals(True)  # se elige a mano abajo, cuando la pestaña ya tiene su documento
+        i = barra.addTab(doc.nombre)
+        barra.setTabData(i, p)
+        self._poner_boton_cerrar(p, i)
+        barra.setCurrentIndex(i)
+        barra.blockSignals(False)
         self.pila.setCurrentWidget(self.editor)
-        self.vista.set_documento(doc)
+        self._pestana_elegida(i)
+
         self.set_herramienta(Herramienta.SELECCIONAR)
         if doc.ruta:
             self._añadir_reciente(doc.ruta)
-        self._cargar_panel_lateral()
         self._comprobar_firmas()
         self._actualizar_estado_ui()
-        QTimer.singleShot(50, self._zoom_inicial)
+        QTimer.singleShot(50, p.vista, lambda: self._zoom_inicial(p))  # no llega si se cierra antes
 
-    def _zoom_inicial(self) -> None:
-        """Ajusta al ancho sin pasar del 140 % y empieza en la primera página."""
-        if self.documento is None:
+    def _zoom_inicial(self, p: Pestana) -> None:
+        """El zoom elegido en Ajustes (por defecto, al ancho sin pasar del 140 %)."""
+        if p not in self.pestanas():
             return
-        r = self.documento.pagina(0).rect
-        disponible = self.vista.viewport().width() - 60
-        self.vista.set_zoom(max(0.5, min(1.4, disponible / r.width)))
-        self.vista.ir_a_pagina(0)
+        v, modo = p.vista, ajustes.zoom_inicial()
+        if modo == "pagina":
+            v.ajustar_pagina()
+        elif modo == "real":
+            v.set_zoom(1.0)
+        else:
+            r = p.documento.pagina(0).rect
+            disponible = v.viewport().width() - 60
+            v.set_zoom(max(0.5, min(1.4, disponible / r.width)))
+        v.ir_a_pagina(min(p.pagina_inicial, p.documento.num_paginas - 1))
 
     def _comprobar_firmas(self) -> None:
-        self.tenia_firmas = False
-        self.banner.setVisible(False)
+        """Mira si el documento de la pestaña actual está firmado y si sus firmas son válidas."""
+        p = self.pestana
+        if p is not None:
+            p.tenia_firmas, p.estado_firmas = False, None
+            try:
+                datos = Path(p.documento.ruta).read_bytes() if p.documento.ruta else b""
+            except OSError:
+                datos = b""
+            if datos and fd.tiene_firmas(datos):
+                p.tenia_firmas = True
+                resultados = fd.verificar_firmas(datos)
+                validas = all(r.integra for r in resultados)
+                n = len(resultados)
+                if validas:
+                    firmantes = ", ".join(dict.fromkeys(r.firmante for r in resultados))
+                    texto = (f"<b>Documento firmado</b> · {n} firma{'s' if n > 1 else ''} "
+                             f"válida{'s' if n > 1 else ''} · {firmantes}")
+                else:
+                    texto = ("<b>Firma no válida</b> · el documento se ha modificado después de firmarse "
+                             "o la firma está dañada")
+                p.estado_firmas = (validas, texto)
+        self._pintar_banner()
+
+    def _pintar_banner(self) -> None:
+        """Aviso de documento firmado de la pestaña actual (se recuerda: cambiar de pestaña no
+        vuelve a verificar las firmas)."""
+        estado = self.pestana.estado_firmas if self.pestana else None
+        self.banner.setVisible(estado is not None)
         QTimer.singleShot(0, self._recolocar_flotantes)
-        if not self.documento or not self.documento.ruta:
+        if estado is None:
             return
-        try:
-            datos = Path(self.documento.ruta).read_bytes()
-        except OSError:
-            return
-        if not fd.tiene_firmas(datos):
-            return
-        self.tenia_firmas = True
-        resultados = fd.verificar_firmas(datos)
-        validas = all(r.integra for r in resultados)
-        n = len(resultados)
+        validas, texto = estado
         p = tema.paleta()
         if validas:
-            firmantes = ", ".join(dict.fromkeys(r.firmante for r in resultados))
-            texto = (f"<b>Documento firmado</b> · {n} firma{'s' if n > 1 else ''} "
-                     f"válida{'s' if n > 1 else ''} · {firmantes}")
             color, fondo, ico = p.exito, p.exito_suave, "check-decagram"
         else:
-            texto = ("<b>Firma no válida</b> · el documento se ha modificado después de firmarse "
-                     "o la firma está dañada")
             color, fondo, ico = p.error, p.error_suave, "alert-decagram"
         self._banner_interior.setStyleSheet(
             f"QFrame#banner {{ background: {fondo}; border: 1px solid {color}; border-radius: 10px; }}"
@@ -1023,9 +1196,7 @@ class VentanaPrincipal(QMainWindow):
         self.banner_icono.setPixmap(tema.icono(ico, color).pixmap(22, 22))
         self.banner_texto.setText(texto)
         self._banner_wrapper_estilo()
-        self.banner.setVisible(True)
         self._banner_interior.setVisible(True)
-        QTimer.singleShot(0, self._recolocar_flotantes)
 
     def guardar(self) -> bool:
         if self.documento is None:
@@ -1099,15 +1270,167 @@ class VentanaPrincipal(QMainWindow):
         puente_claude.mostrar_dialogo(self)
 
     def closeEvent(self, ev) -> None:
-        if not self._confirmar_descartar():
-            ev.ignore()
-            return
+        for p in self.pestanas():
+            if p.documento.modificado:
+                self.elegir_pestana(p)  # que se vea de qué documento se pregunta
+                if not self._confirmar_descartar():
+                    ev.ignore()
+                    return
         self.ajustes.setValue("ventana/geometria", self.saveGeometry())
-        if self.documento:
-            self.documento.cerrar()
+        for p in self.pestanas():
+            p.documento.cerrar()
         if self in _ventanas:
             _ventanas.remove(self)
         ev.accept()
+
+    def abrir_ajustes(self) -> None:
+        dlg = ajustes.DialogoAjustes(self)
+        dlg.panel_cambiado.connect(_mostrar_miniaturas)
+        dlg.actualizar_cambiado.connect(_actualizar_automatico)
+        dlg.predeterminada_pedida.connect(self.hacer_predeterminada)
+        dlg.exec()
+
+    # ------------------------------------------------------------------
+    # Pestañas
+    # ------------------------------------------------------------------
+    def pestanas(self) -> list[Pestana]:
+        b = self.barra_pestanas
+        return [b.tabData(i) for i in range(b.count())]
+
+    def _indice(self, p: Pestana | None) -> int:
+        b = self.barra_pestanas
+        return next((i for i in range(b.count()) if b.tabData(i) is p), -1)
+
+    def elegir_pestana(self, p: Pestana) -> None:
+        if (i := self._indice(p)) >= 0:
+            self.barra_pestanas.setCurrentIndex(i)
+
+    def _paso_pestana(self, paso: int) -> None:
+        n = self.barra_pestanas.count()
+        if n > 1:
+            self.barra_pestanas.setCurrentIndex((self.barra_pestanas.currentIndex() + paso) % n)
+
+    def _pestana_elegida(self, i: int) -> None:
+        nueva = self.barra_pestanas.tabData(i) if i >= 0 else None
+        anterior = self.pestana
+        if nueva is anterior:
+            return
+        herramienta = self.vista.herramienta  # la herramienta en uso se mantiene al cambiar de documento
+        if anterior is not None:
+            anterior.busqueda = self.campo_buscar.text()
+            anterior.ultima_busqueda = self._ultima_busqueda
+        self.pestana = nueva
+        if nueva is None:  # se ha cerrado la última: lo resuelve _quitar_pestana
+            return
+        self.pila_vistas.setCurrentWidget(nueva.vista)
+        if nueva.vista.herramienta != herramienta:
+            nueva.vista.set_herramienta(herramienta)
+        self._sincronizar_rail()
+        self.campo_buscar.blockSignals(True)
+        self.campo_buscar.setText(nueva.busqueda)
+        self.campo_buscar.blockSignals(False)
+        self._ultima_busqueda = nueva.ultima_busqueda
+        self._actualizar_contador_busqueda()
+        self._cargar_panel_lateral(conservar=True)
+        self._pintar_banner()
+        self._actualizar_estado_ui()
+        self._pagina_cambiada(nueva.vista.pagina_actual())
+        self._zoom_cambiado(nueva.vista.zoom)
+        nueva.vista.setFocus()
+
+    def _rotular_pestana(self, p: Pestana | None) -> None:
+        if (i := self._indice(p)) < 0:
+            return
+        d = p.documento
+        self.barra_pestanas.setTabText(i, ("• " if d.modificado else "") + d.nombre)
+        self.barra_pestanas.setTabToolTip(i, (d.ruta or d.nombre) + ("\nCambios sin guardar" if d.modificado else ""))
+
+    def _poner_boton_cerrar(self, p: Pestana, i: int) -> None:
+        b = QToolButton()
+        tema.poner_icono(b, "close", tema.paleta().texto_suave)
+        b.setIconSize(QSize(14, 14))
+        b.setFixedSize(20, 20)
+        b.setToolTip(teclas("Cerrar (⌘W)"))
+        b.setCursor(Qt.PointingHandCursor)
+        b.clicked.connect(lambda: self._cerrar_pestana(p))
+        barra = self.barra_pestanas
+        lado = barra.style().styleHint(QStyle.SH_TabBar_CloseButtonPosition, None, barra)  # izquierda en el Mac
+        barra.setTabButton(i, QTabBar.ButtonPosition(lado), b)
+
+    def _menu_pestana(self, pos) -> None:
+        i = self.barra_pestanas.tabAt(pos)
+        if i < 0:
+            return
+        p = self.barra_pestanas.tabData(i)
+        varias = self.barra_pestanas.count() > 1
+        menu = QMenu(self)
+        menu.addAction("Cerrar", lambda: self._cerrar_pestana(p))
+        menu.addAction("Cerrar las demás", lambda: self._cerrar_demas(p)).setEnabled(varias)
+        menu.addSeparator()
+        menu.addAction("Mover a una ventana nueva", lambda: self.mover_a_ventana_nueva(p)).setEnabled(varias)
+        if p.documento.ruta:
+            menu.addAction(f"Mostrar en {NOMBRE_EXPLORADOR}", lambda: compartir.mostrar_en_carpeta(p.documento.ruta))
+        menu.exec(self.barra_pestanas.mapToGlobal(pos))
+
+    def _cerrar_pestana(self, p: Pestana | None, confirmar: bool = True) -> bool:
+        """Cierra el documento de la pestaña (preguntando si tiene cambios). False si se cancela."""
+        if self._indice(p) < 0:
+            return False
+        if confirmar and p.documento.modificado:
+            self.elegir_pestana(p)
+            if not self._confirmar_descartar():
+                return False
+        self._quitar_pestana(p)
+        p.documento.cerrar()
+        return True
+
+    def _cerrar_demas(self, p: Pestana) -> None:
+        for otra in self.pestanas():
+            if otra is not p and not self._cerrar_pestana(otra):
+                break
+        self.elegir_pestana(p)
+
+    def _quitar_pestana(self, p: Pestana) -> None:
+        """Saca la pestaña de la ventana sin cerrar su documento (sirve también para llevarlo a otra)."""
+        self.barra_pestanas.removeTab(self._indice(p))  # muestra otra: la que se usó antes
+        self.pila_vistas.removeWidget(p.vista)
+        p.vista.set_documento(None)
+        p.vista.deleteLater()
+        if self.barra_pestanas.count() == 0:
+            self._sin_documentos()
+        else:
+            self._actualizar_estado_ui()
+
+    def _sin_documentos(self) -> None:
+        self.pestana = None
+        self.pila_vistas.setCurrentWidget(self._vista_vacia)
+        self._cola_miniaturas = []
+        self.miniaturas.clear()
+        self.marcadores.clear()
+        self.campo_buscar.clear()
+        self._pintar_banner()
+        self.set_herramienta(Herramienta.SELECCIONAR)
+        self._actualizar_estado_ui()
+        self._mostrar_bienvenida()
+
+    def mover_a_ventana_nueva(self, p: Pestana | None) -> None:
+        if p is None or self.barra_pestanas.count() < 2:
+            return
+        pagina = p.vista.pagina_actual()
+        self._quitar_pestana(p)
+        otra = nueva_ventana()
+        otra.move(self.x() + 30, self.y() + 30)
+        otra.mostrar_documento(p.documento, pagina)  # con sus cambios y lo que se pueda deshacer
+        _traer(otra, True)
+
+    def juntar_ventanas(self) -> None:
+        for otra in [v for v in _ventanas if v is not self]:
+            for p in otra.pestanas():
+                pagina = p.vista.pagina_actual()
+                otra._quitar_pestana(p)
+                self.mostrar_documento(p.documento, pagina)
+            otra.close()
+        _traer(self, True)
 
     def _recientes(self) -> list[str]:
         return [r for r in self.ajustes.value("recientes", [], type=list) if os.path.exists(r)]
@@ -1121,7 +1444,7 @@ class VentanaPrincipal(QMainWindow):
         self.menu_recientes.clear()
         recientes = self._recientes()
         for r in recientes:
-            self.menu_recientes.addAction(os.path.basename(r), lambda _=False, x=r: abrir_en_ventana(x)).setToolTip(r)
+            self.menu_recientes.addAction(os.path.basename(r), lambda _=False, x=r: abrir_en_ventana(x, self)).setToolTip(r)
         if not recientes:
             self.menu_recientes.addAction("(vacío)").setEnabled(False)
         else:
@@ -1140,21 +1463,31 @@ class VentanaPrincipal(QMainWindow):
         for url in ev.mimeData().urls():
             ruta = url.toLocalFile()
             if ruta.lower().endswith(".pdf"):
-                abrir_en_ventana(ruta)
+                abrir_en_ventana(ruta, self)
 
     # ------------------------------------------------------------------
     # Panel lateral
     # ------------------------------------------------------------------
-    def _cargar_panel_lateral(self, seleccion: list[int] | None = None) -> None:
+    def _cargar_panel_lateral(self, seleccion: list[int] | None = None, conservar: bool = False) -> None:
+        """Rellena miniaturas y marcadores. Con `conservar` (al volver a una pestaña) reutiliza las
+        miniaturas ya pintadas; si no, es que el documento ha cambiado y se pintan de nuevo."""
+        p = self.pestana
+        if not conservar:
+            p.miniaturas.clear()
+        n = self.documento.num_paginas
         tamanos = []
-        for i in range(self.documento.num_paginas):
+        for i in range(n):
             r = self.documento.pagina(i).rect
             tamanos.append(tam_miniatura(r.width, r.height))
         self.miniaturas.cargar(tamanos)
+        for i, (pix, tam) in p.miniaturas.items():
+            if i < n:
+                self.miniaturas.poner_miniatura(i, pix, tam)
         actual = seleccion[0] if seleccion else self.vista.pagina_actual()
         self.miniaturas.seleccionar(seleccion or [actual], actual)
         # Primero las que se ven; luego el resto
-        self._cola_miniaturas = sorted(range(self.documento.num_paginas), key=lambda i: abs(i - actual))
+        faltan = (i for i in range(n) if i not in p.miniaturas)
+        self._cola_miniaturas = sorted(faltan, key=lambda i: abs(i - actual))
         self._temporizador_mini.start(0)
 
         self.marcadores.clear()
@@ -1192,7 +1525,9 @@ class VentanaPrincipal(QMainWindow):
         escala = tam.width() * max(2.0, self.devicePixelRatioF()) / r.width
         pm = pagina.get_pixmap(matrix=pymupdf.Matrix(escala, escala), alpha=False)
         img = QImage(pm.samples, pm.width, pm.height, pm.stride, QImage.Format_RGB888).copy()
-        self.miniaturas.poner_miniatura(i, QPixmap.fromImage(img), tam)
+        pix = QPixmap.fromImage(img)
+        self.pestana.miniaturas[i] = (pix, tam)
+        self.miniaturas.poner_miniatura(i, pix, tam)
 
     def _miniatura_elegida(self, fila: int) -> None:
         if self.documento is not None and 0 <= fila < self.documento.num_paginas:
@@ -1340,12 +1675,7 @@ class VentanaPrincipal(QMainWindow):
         if dlg.exec() != QDialog.Accepted or dlg.resultado is None:
             return
         nuevo = dlg.resultado
-        if self.documento is None:
-            self.mostrar_documento(nuevo)
-            ventana = self
-        else:
-            mostrar_en_ventana(nuevo)
-            ventana = next(v for v in _ventanas if v.documento is nuevo)
+        ventana = mostrar_en_ventana(nuevo, preferida=self)
         ventana.aviso(teclas(f"Documento combinado: {nuevo.num_paginas} páginas. Guárdalo con ⌘S"), 6)
 
     def extraer_paginas(self, rango: str | None = None) -> None:
@@ -1796,9 +2126,10 @@ class VentanaPrincipal(QMainWindow):
             self._comprobar_firmas()
             self._actualizar_estado_ui()
             self.aviso("Firma quitada: este es el documento tal como estaba antes de firmarlo.", 6)
-        else:  # el firmado sigue abierto aquí y el nuevo, en otra ventana
-            abrir_en_ventana(destino)
-            self.aviso("Firma quitada: el documento sin ella se ha abierto en otra ventana.", 6)
+        else:  # el firmado sigue abierto y el nuevo se abre al lado
+            v = abrir_en_ventana(destino, self)
+            donde = "otra pestaña" if v is self else "otra ventana"
+            (v or self).aviso(f"Firma quitada: el documento sin ella se ha abierto en {donde}.", 6)
 
     # ------------------------------------------------------------------
     # Compartir
@@ -1892,22 +2223,11 @@ class VentanaPrincipal(QMainWindow):
     # Documento y firmas guardadas
     # ------------------------------------------------------------------
     def cerrar_documento(self) -> None:
-        if self.documento is None:
+        """⌘W: cierra la pestaña que se ve; sin documentos, la ventana."""
+        if self.pestana is None:
             self.close()
             return
-        if not self._confirmar_descartar():
-            return
-        self.vista.set_documento(None)
-        self.documento.cerrar()
-        self.documento = None
-        self.tenia_firmas = False
-        self.banner.setVisible(False)
-        self.miniaturas.clear()
-        self.marcadores.clear()
-        self.campo_buscar.clear()
-        self.set_herramienta(Herramienta.SELECCIONAR)
-        self._actualizar_estado_ui()
-        self._mostrar_bienvenida()
+        self._cerrar_pestana(self.pestana)
 
     def gestionar_firmas(self) -> None:
         DialogoFirmas(self, seleccionar=False).exec()

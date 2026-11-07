@@ -74,6 +74,18 @@ En Windows funciona igual que en el Mac, con estas equivalencias:
 | | **Combinar documentos**: varios PDF (y fotos o escaneos) en uno nuevo, en el orden y con las páginas que elijas | |
 | Imprimir (⌘P) | Deshacer/rehacer (⌘Z / ⇧⌘Z) | |
 
+### Pestañas y Ajustes
+
+Con un PDF abierto, los que abras después (con ⌘O, desde el Finder o el Explorador, arrastrándolos o
+desde Chrome) se abren **en pestañas de la misma ventana**. La barra de pestañas aparece en cuanto hay
+dos; ⌃⇥ / ⌃⇧⇥ (Ctrl+Tab en Windows) pasa de una a otra, ⌘W cierra la que se ve y el botón derecho
+sobre una pestaña la saca a su propia ventana. **Archivo → Nueva ventana** (⌘N) abre otra ventana y
+**Ventana → Juntar todas las ventanas en pestañas** las reúne.
+
+En **Ajustes** (⌘, en el Mac, en el menú Mezquita PDF; Edición → Ajustes en Windows) se elige lo
+que vale por defecto: pestañas o una ventana por documento, el zoom al abrir, las miniaturas, la marca
+de agua del sello, las actualizaciones automáticas y la app predeterminada para los PDF.
+
 ## Compartir
 
 Botón **Compartir** (arriba a la derecha) o menú *Archivo → Compartir*:
@@ -234,7 +246,8 @@ Diagnóstico rápido (sin datos personales):
 
 ```
 main.py                 Punto de entrada
-visor/ventana.py        Ventana principal: menús, barras, páginas, firmas, impresión
+visor/ventana.py        Ventana principal: pestañas, menús, barras, páginas, firmas, impresión
+visor/ajustes.py        Ajustes (⌘,): pestañas o ventanas, zoom inicial y demás opciones por defecto
 visor/vista.py          Renderizado de páginas, zoom y herramientas de edición
 visor/documento.py      Documento PDF con deshacer/rehacer y guardado incremental
 visor/dialogos.py       Diálogos (texto, firmas manuscritas, certificado, verificación)

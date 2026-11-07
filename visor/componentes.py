@@ -13,7 +13,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout,
-    QLabel, QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QLabel, QPushButton, QScrollArea, QSizePolicy, QTabBar, QToolButton, QVBoxLayout, QWidget,
 )
 
 from . import compartir, tema
@@ -222,6 +222,30 @@ class BotonRail(QToolButton):
         self.setToolTip(consejo or texto)
         self.setCursor(Qt.PointingHandCursor)
         tema.poner_icono(self, nombre_icono, tema.paleta().texto_suave)
+
+
+class BarraPestanas(QTabBar):
+    """Pestañas de los documentos abiertos en una ventana. Con el botón central se cierran."""
+    cerrar_pedido = Signal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("pestanas")
+        self.setDocumentMode(True)
+        self.setDrawBase(False)
+        self.setMovable(True)
+        self.setExpanding(False)
+        self.setElideMode(Qt.ElideMiddle)
+        self.setUsesScrollButtons(True)
+        self.setSelectionBehaviorOnRemove(QTabBar.SelectPreviousTab)
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mouseReleaseEvent(self, ev) -> None:
+        if ev.button() == Qt.MiddleButton and (i := self.tabAt(ev.position().toPoint())) >= 0:
+            self.cerrar_pedido.emit(i)
+            return
+        super().mouseReleaseEvent(ev)
 
 
 class LineaRail(QFrame):

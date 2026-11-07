@@ -170,5 +170,65 @@ dlg.boton_quitar.click()
 assert dlg.quitar_indice == 0 and "desaparecerá la firma posterior" in preguntas[0], (dlg.quitar_indice, preguntas)
 assert not hasattr(DialogoVerificacion(fd.verificar_firmas(firmado), None), "boton_quitar")
 
+# 10. Pestañas: con un PDF abierto, los demás se abren en la misma ventana (o en otra, según Ajustes)
+from visor import ajustes  # noqa: E402
+(TMP / "firmado.pdf").write_bytes(firmado)
+assert ajustes.en_pestanas(), "por defecto, en pestañas"
+v = ventana.nueva_ventana()
+assert ventana.abrir_en_ventana(str(TMP / "varias.pdf"), v) is v
+assert ventana.abrir_en_ventana(str(TMP / "firmado.pdf")) is v  # p. ej. doble clic en Finder
+assert len(ventana._ventanas) == 1 and v.barra_pestanas.count() == 2 and not v.zona_pestanas.isHidden()
+assert v.documento.nombre == "firmado.pdf" and v.tenia_firmas and not v.banner.isHidden()
+assert ventana.abrir_en_ventana(str(TMP / "varias.pdf")) is v and v.barra_pestanas.count() == 2, "ya abierto: se muestra"
+assert v.documento.nombre == "varias.pdf" and not v.tenia_firmas and v.banner.isHidden()
+assert v.campo_buscar.text() == "" and v.miniaturas.count() == 5
+v.campo_buscar.setText("P3")
+v._buscar()
+v.girar_pagina(90, [0])
+assert v.barra_pestanas.tabText(0) == "• varias.pdf" and v.barra_pestanas.tabText(1) == "firmado.pdf"
+while v._cola_miniaturas:
+    app.processEvents()
+assert len(v.pestana.miniaturas) == 5, "las miniaturas pintadas se guardan para volver a la pestaña"
+v._paso_pestana(1)
+assert v.documento.nombre == "firmado.pdf" and v.campo_buscar.text() == "" and v.tenia_firmas
+v._paso_pestana(1)
+assert v.campo_buscar.text() == "P3" and v.miniaturas.count() == 5 and v.documento.modificado
+# Claude ve cada pestaña como un documento y pasa a la que usa
+estado = json.loads(pedir("estado")["texto"])["documentos"]
+assert [(d["nombre"], d["activo"]) for d in estado] == [("varias.pdf", True), ("firmado.pdf", False)], estado
+assert "Lorem" in pedir("leer_texto", documento="2", paginas="1")["texto"] and v.documento.nombre == "firmado.pdf"
+assert json.loads(pedir("estado")["texto"])["documentos"][1]["activo"]
+# Sacar una pestaña a su ventana y volver a juntarlas (sin perder los cambios ni el deshacer)
+v.elegir_pestana(v.pestanas()[0])
+v.mover_a_ventana_nueva(v.pestana)
+assert len(ventana._ventanas) == 2 and v.barra_pestanas.count() == 1 and v.zona_pestanas.isHidden()
+otra = ventana._ventanas[1]
+assert otra.documento.nombre == "varias.pdf" and otra.documento.modificado and otra.documento.puede_deshacer()
+v.juntar_ventanas()
+app.processEvents()
+assert ventana._ventanas == [v] and [p.documento.nombre for p in v.pestanas()] == ["firmado.pdf", "varias.pdf"]
+# En ventanas separadas, si se elige así en Ajustes
+QSettings().setValue(ajustes.PESTANAS, False)
+otra = ventana.abrir_en_ventana(str(TMP / "anotado.pdf"), v)
+assert otra is not v and len(ventana._ventanas) == 2 and otra.barra_pestanas.count() == 1
+otra.close()
+QSettings().setValue(ajustes.PESTANAS, True)
+dlg = ajustes.DialogoAjustes(v)
+assert dlg.radio_pestanas.isChecked() and dlg.combo_zoom.currentData() == "ancho"
+dlg.radio_ventanas.setChecked(True)
+assert not ajustes.en_pestanas()
+dlg.radio_pestanas.setChecked(True)
+dlg.close()
+# ⌘W cierra la pestaña que se ve; con la última, vuelve la pantalla de bienvenida
+for p in v.pestanas():
+    p.documento.modificado = False
+v.cerrar_documento()
+assert v.barra_pestanas.count() == 1 and v.documento is not None
+v.cerrar_documento()
+assert v.documento is None and v.pila.currentWidget() is v.bienvenida and v.miniaturas.count() == 0
+v.close()
+app.processEvents()
+assert ventana._ventanas == []
+
 shutil.rmtree(TMP, ignore_errors=True)
 print("✅ Prueba básica superada")

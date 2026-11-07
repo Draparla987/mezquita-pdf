@@ -125,25 +125,33 @@ def _V():
 
 
 def _con_documento() -> list:
-    return [v for v in _V()._ventanas if v.documento is not None]
+    """Los documentos abiertos (una pestaña cada uno), ventana a ventana."""
+    return _V().todas_las_pestanas()
 
 
 def _ventana(args: dict):
+    """La ventana con el documento pedido a la vista: Claude trabaja siempre sobre lo que se ve, así que
+    si el documento está en otra pestaña, se pasa a esa pestaña (sin quitarle el foco a otra app)."""
     docs = _con_documento()
     if not docs:
         raise ErrorClaude("No hay ningún documento abierto en Mezquita PDF. Usa «abrir_documento».")
     clave = str(args.get("documento") or "").strip()
+    elegida = None
     if not clave:
-        return _V().ventana_activa() or docs[0]
-    if clave.isdigit() and 1 <= int(clave) <= len(docs):
-        return docs[int(clave) - 1]
-    clave_m = clave.lower()
-    for criterio in (lambda n: n == clave_m, lambda n: n.startswith(clave_m), lambda n: clave_m in n):
-        for v in docs:
-            if criterio(v.documento.nombre.lower()):
-                return v
-    raise ErrorClaude(f"No encuentro el documento «{clave}». Abiertos: "
-                      + ", ".join(f"{i}. {v.documento.nombre}" for i, v in enumerate(docs, 1)))
+        elegida = _V().pestana_activa() or docs[0]
+    elif clave.isdigit() and 1 <= int(clave) <= len(docs):
+        elegida = docs[int(clave) - 1]
+    else:
+        clave_m = clave.lower()
+        for criterio in (lambda n: n == clave_m, lambda n: n.startswith(clave_m), lambda n: clave_m in n):
+            elegida = next((p for p in docs if criterio(p.documento.nombre.lower())), None)
+            if elegida:
+                break
+    if elegida is None:
+        raise ErrorClaude(f"No encuentro el documento «{clave}». Abiertos: "
+                          + ", ".join(f"{i}. {p.documento.nombre}" for i, p in enumerate(docs, 1)))
+    elegida.ventana.elegir_pestana(elegida)
+    return elegida.ventana
 
 
 def _paginas(v, texto, por_defecto_todas: bool = True) -> list[int]:
@@ -201,7 +209,7 @@ def _lista(nums: list[int]) -> str:
 # Herramientas
 # ----------------------------------------------------------------------------
 def h_estado(_args) -> dict:
-    activa = _V().ventana_activa()
+    activa = _V().pestana_activa()
     docs = []
     for k, v in enumerate(_con_documento(), 1):
         d = v.documento
@@ -222,20 +230,9 @@ def h_estado(_args) -> dict:
 def h_abrir_documento(args) -> dict:
     ruta = _rutas([args.get("ruta")])[0]
     V = _V()
-    def abierta():
-        return next((v for v in V._ventanas if v.documento and v.documento.ruta
-                     and os.path.abspath(v.documento.ruta) == ruta), None)
-    v = abierta()
-    if v is None:
-        vacia = next((v for v in V._ventanas if v.documento is None), None)
-        if vacia is not None:
-            vacia.abrir_ruta(ruta)
-        else:
-            V.nueva_ventana(ruta)
-        v = abierta()
+    v = V.abrir_en_ventana(ruta, activar=False)  # en una pestaña o en una ventana, según Ajustes
     if v is None:
         raise ErrorClaude("No se ha abierto (no es un PDF válido o el usuario canceló la contraseña).")
-    V.marcar_activa(v)
     _aviso(v, "ha abierto el documento")
     return {"texto": f"Abierto «{v.documento.nombre}» ({v.documento.num_paginas} páginas). "
                      "Es ahora el documento activo."}
@@ -591,7 +588,7 @@ def h_extraer_paginas(args) -> dict:
     nuevo = Documento(datos=datos, nombre=nombre)
     nuevo.modificado = True
     _aviso(_V().mostrar_en_ventana(nuevo, activar=False), f"ha copiado {len(paginas)} páginas aquí")
-    return {"texto": f"Creado «{nombre}» ({len(paginas)} páginas), abierto en otra ventana sin guardar; "
+    return {"texto": f"Creado «{nombre}» ({len(paginas)} páginas), abierto aparte sin guardar; "
                      "es ahora el documento activo."}
 
 

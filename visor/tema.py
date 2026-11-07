@@ -139,6 +139,21 @@ def hoja_estilos(p: Paleta) -> str:
     QLineEdit#busqueda:focus {{ background: {p.superficie}; border-color: {p.acento}; }}
     QLabel#contadorBusqueda {{ color: {p.texto_suave}; }}
 
+    /* ---------- Pestañas de documentos ---------- */
+    QWidget#zonaPestanas {{ background: {p.panel}; border-bottom: 1px solid {p.borde}; }}
+    QTabBar#pestanas {{ background: transparent; }}
+    QTabBar#pestanas::tab {{ background: transparent; color: {p.texto_suave}; font-weight: 500;
+                             border: 1px solid transparent; border-bottom: none;
+                             border-top-left-radius: 9px; border-top-right-radius: 9px;
+                             padding: 7px 10px 7px 12px; margin: 0 2px 0 0;
+                             min-width: 110px; max-width: 230px; }}
+    QTabBar#pestanas::tab:hover:!selected {{ background: {_rgba(p.texto, 0.06)}; color: {p.texto}; }}
+    QTabBar#pestanas::tab:selected {{ background: {p.superficie}; color: {p.texto}; font-weight: 600;
+                                      border-color: {p.borde}; border-top: 2px solid {p.acento}; }}
+    QTabBar#pestanas QToolButton {{ padding: 1px; border-radius: 5px; background: transparent; }}
+    QTabBar#pestanas QToolButton:hover {{ background: {_rgba(p.texto, 0.12)}; }}
+    QLabel#nota {{ color: {p.texto_suave}; font-size: 12px; }}
+
     /* ---------- Barra de herramientas lateral ---------- */
     QWidget#rail, QScrollArea#railScroll {{ background: {p.panel}; border: none; }}
     QScrollArea#railScroll {{ border-right: 1px solid {p.borde}; }}
