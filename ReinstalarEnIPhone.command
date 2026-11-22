@@ -67,7 +67,12 @@ LOG_COMPILACION="$DATOS/compilacion_iphone.log"
        -destination "generic/platform=iOS" -derivedDataPath ios/App/build_dispositivo \
        -allowProvisioningUpdates -quiet >"$LOG_COMPILACION" 2>&1 || {
   echo "❌ Falló la compilación (detalles en $LOG_COMPILACION)."
-  avisar "Mezquita PDF" "No se pudo preparar la app del iPhone. Abre ReinstalarEnIPhone.command para ver el error."
+  if grep -q "No Accounts" "$LOG_COMPILACION"; then  # pasa de vez en cuando: Xcode olvida la cuenta
+    echo "   Xcode ha perdido tu cuenta de Apple: abre Xcode → Ajustes → Cuentas y vuelve a entrar."
+    avisar "Mezquita PDF" "Xcode ha perdido tu cuenta de Apple: abre Xcode → Ajustes → Cuentas y vuelve a entrar para renovar la app del iPhone."
+  else
+    avisar "Mezquita PDF" "No se pudo preparar la app del iPhone. Abre ReinstalarEnIPhone.command para ver el error."
+  fi
   terminar 1
 }
 
