@@ -377,6 +377,73 @@ body.soltando::after {
 .boton-seleccion { width: 40px; height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--texto); display: grid; place-items: center; }
 .boton-seleccion:hover { background: var(--acento-suave); color: var(--acento); }
 
+/* Escribir sobre la página: el texto empieza justo en la esquina del cuadro (el recuadro va por fuera) */
+.editor-texto {
+  position: absolute;
+  z-index: 4;
+  border-radius: 2px;
+  outline: 1.5px dashed var(--acento);
+  outline-offset: 5px;
+  background: color-mix(in srgb, var(--acento) 5%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--acento) 5%, transparent);
+}
+.editor-texto .area-texto, .editor-texto .area-texto:focus {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.editor-texto .area-texto::placeholder { color: currentColor; opacity: .4; }
+.barra-texto {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  box-shadow: var(--sombra-flotante);
+  white-space: nowrap;
+  z-index: 5;
+}
+.editor-texto.barra-abajo .barra-texto { bottom: auto; top: calc(100% + 16px); }
+.boton-texto {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--texto);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.boton-texto small { font-size: 11px; }
+@media (hover: hover) { .boton-texto:hover { background: var(--acento-suave); color: var(--acento); } }
+.boton-texto.listo { background: var(--acento); color: #fff; }
+.valor-texto { min-width: 46px; text-align: center; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto); }
+
 /* Elementos flotantes sobre el visor */
 .indicador-pagina, .pildora, .aviso-firmas {
   position: absolute;

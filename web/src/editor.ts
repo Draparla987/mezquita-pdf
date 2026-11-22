@@ -10,6 +10,7 @@ import { flujoFirmaDigital, hojaCertificados, hojaFirmasDocumento } from './firm
 import { icono, type NombreIcono } from './iconos';
 import { type Anotacion, type AnotTexto, nuevoId } from './modelo';
 import { elegirFirma } from './pad-firma';
+import { EdicionTexto } from './texto-en-linea';
 import { aplicarAnotaciones } from './pdf/anotaciones-pdf';
 import { compartirBytes, descargar } from './compartir';
 import { type EstadoFirma, pareceFirmado, verificarFirmas } from './pdf/verificar';
@@ -100,6 +101,7 @@ export class Editor {
   private colores: Record<string, string> = { resaltar: COLORES_RESALTADO[0], dibujar: COLORES_TRAZO[1], rectangulo: COLORES_TRAZO[2], texto: '#111111' };
   private grosores: Record<string, number> = { dibujar: 2.5, rectangulo: 2 };
   private tamTexto = 14;
+  private edicion: EdicionTexto | null = null;
   private firmaActual: FirmaGuardada | null = null;
   private alCajaFirma: ((pagina: number, caja: { x: number; y: number; w: number; h: number }) => void) | null = null;
   aplanar = true;
@@ -126,7 +128,7 @@ export class Editor {
     const raizVisor = el('main.visor', { tabindex: '-1', 'data-herramienta': 'mano' });
     this.visor = new Visor(raizVisor, {
       alCambiarPagina: (n, total) => this.actualizarIndicador(n, total),
-      alCambiarZoom: (z) => { this.elZoom.textContent = `${Math.round(z * 75)} %`; },
+      alCambiarZoom: (z) => { this.elZoom.textContent = `${Math.round(z * 75)} %`; this.edicion?.ajustar(); },
       alCrearPagina: (p) => this.capa.prepararPagina(p),
       alPellizcar: () => this.capa.cancelar(),
     });
@@ -329,6 +331,7 @@ export class Editor {
   /* ------------------------------------------------------------------------ */
 
   async compartir(): Promise<void> {
+    this.terminarTexto();
     let bytes: Uint8Array;
     if (this.exportListo()) {
       // Sin ningún «await» antes de navigator.share: Safari exige que se llame
@@ -351,6 +354,7 @@ export class Editor {
   }
 
   async guardarEnArchivos(): Promise<void> {
+    this.terminarTexto();
     const fin = ocupado('Preparando el documento…');
     try {
       await pintar();
@@ -380,6 +384,7 @@ export class Editor {
   }
 
   setHerramienta(h: Herramienta): void {
+    this.terminarTexto();
     if (h !== 'mano' && h !== 'cajaFirma' && !this.editable()) {
       this.avisoNoEditable();
       h = 'mano';
@@ -529,18 +534,21 @@ export class Editor {
   }
 
   deshacer(): void {
+    this.terminarTexto();
     if (this.posHistorial === 0) return;
     this.posHistorial--;
     this.establecer(this.historial[this.posHistorial]);
   }
 
   rehacer(): void {
+    this.terminarTexto();
     if (this.posHistorial >= this.historial.length - 1) return;
     this.posHistorial++;
     this.establecer(this.historial[this.posHistorial]);
   }
 
   borrarUltima(): void {
+    this.terminarTexto();
     if (!this.anotaciones.length) return;
     this.confirmar(this.anotaciones.slice(0, -1));
     toast('Anotación eliminada', { accion: { texto: 'Deshacer', fn: () => this.deshacer() } });
@@ -580,10 +588,10 @@ export class Editor {
         this.antesDeCambio = null;
       },
       eliminar: (id) => this.eliminar(id),
-      editarTexto: (a) => this.dialogoTexto(a.pagina, a.x, a.y, a),
+      editarTexto: (a) => this.escribirTexto(a.pagina, a.x, a.y, a),
       color: () => this.color(),
       grosor: () => this.grosor(),
-      textoEn: (pagina, x, y) => this.dialogoTexto(pagina, x, y),
+      textoEn: (pagina, x, y) => this.escribirTexto(pagina, x, y),
       firmaEn: (pagina, x, y) => this.colocarFirma(pagina, x, y),
       cajaFirmaLista: (pagina, caja) => {
         const fn = this.alCajaFirma;
@@ -592,55 +600,57 @@ export class Editor {
       },
       editable: () => this.editable(),
       avisoNoEditable: () => this.avisoNoEditable(),
+      editandoTexto: () => this.edicion !== null,
+      terminarTexto: () => this.terminarTexto(),
     };
   }
 
-  private dialogoTexto(pagina: number, x: number, y: number, existente?: AnotTexto): void {
-    const area = el('textarea', { rows: '3', placeholder: 'Escribe el texto…', 'aria-label': 'Texto', autofocus: true }) as HTMLTextAreaElement;
-    area.value = existente?.texto ?? '';
-    let tam = existente?.tam ?? this.tamTexto;
-    let color = existente?.color ?? this.colores.texto;
-    const valor = el('span.pildora-valor', {}, `${tam} pt`);
-    const deslizador = el('input', { type: 'range', min: '8', max: '48', step: '1', value: String(tam), 'aria-label': 'Tamaño' }) as HTMLInputElement;
-    deslizador.addEventListener('input', () => { tam = Number(deslizador.value); valor.textContent = `${tam} pt`; });
-    const colores = el('div.pildora-colores', { role: 'radiogroup', 'aria-label': 'Color' });
-    for (const c of ['#111111', ...COLORES_TRAZO.slice(0, 3)]) {
-      colores.append(el('button.muestra-color', {
-        type: 'button', role: 'radio', 'aria-checked': String(c === color), 'aria-label': `Color ${c}`, style: { '--color': c } as never,
-        onclick: (ev: Event) => { color = c; colores.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b === ev.currentTarget))); },
-      }));
-    }
-    abrirHoja({
-      titulo: existente ? 'Editar texto' : 'Añadir texto',
-      contenido: el('div.formulario', {}, area,
-        el('div.fila-opciones', {}, el('label.pildora-grosor', {}, el('span.etiqueta-corta', {}, 'Tamaño'), deslizador, valor), colores)),
-      botones: [
-        ...(existente ? [{ texto: 'Eliminar', tipo: 'peligro' as const, accion: () => this.eliminar(existente.id) }] : []),
-        { texto: 'Cancelar', tipo: 'secundario' },
-        {
-          texto: existente ? 'Guardar' : 'Añadir', tipo: 'primario',
-          accion: () => {
-            const texto = area.value.replace(/\s+$/, '');
-            if (!texto.trim()) {
-              if (existente) this.eliminar(existente.id);
-              return;
-            }
-            this.tamTexto = tam;
-            this.colores.texto = color;
-            if (existente) {
-              const a: AnotTexto = { ...existente, texto, tam, color };
-              this.confirmar(this.anotaciones.map((z) => (z.id === a.id ? a : z)));
-            } else {
-              const p = this.visor.paginas[pagina];
-              const a: AnotTexto = { id: nuevoId(), pagina, tipo: 'texto', x: Math.min(x, p.ancho - 20), y: Math.max(0, y - tam * 0.6), texto, tam, color };
-              this.anadir(a);
-              this.seleccionar(a.id);
-            }
-          },
-        },
-      ],
+  /** Texto escrito directamente sobre la página, viéndolo tal como quedará (también para cambiar uno). */
+  private escribirTexto(pagina: number, x: number, y: number, existente?: AnotTexto): void {
+    this.terminarTexto();
+    const p = this.visor.paginas[pagina];
+    const capa = this.capa.capaUi(pagina);
+    if (!p || !capa) return;
+    if (!this.editable()) return this.avisoNoEditable();
+    this.seleccionar(null);
+    const tam0 = existente?.tam ?? this.tamTexto;
+    const color0 = existente?.color ?? this.colores.texto;
+    // El toque queda a media altura de la primera línea, donde aparece el cursor
+    const x0 = existente ? existente.x : Math.min(x, p.ancho - 20);
+    const y0 = existente ? existente.y : Math.max(0, y - tam0 * 0.6);
+    if (existente) this.capa.ocultar(existente.id);
+    this.edicion = new EdicionTexto({
+      pagina: p, capa, x: x0, y: y0, texto: existente?.texto ?? '', tam: tam0, color: color0,
+      colores: ['#111111', ...COLORES_TRAZO.slice(0, 3)],
+      alTerminar: (texto, tam, color) => {
+        this.edicion = null;
+        this.capa.ocultar(null);
+        if (!texto.trim()) { // se ha borrado todo: fuera el texto
+          if (existente) this.eliminar(existente.id);
+          return;
+        }
+        this.tamTexto = tam;
+        this.colores.texto = color;
+        void almacen.fijarAjuste('colores', this.colores);
+        if (this.herramienta === 'texto') this.actualizarPildora();
+        if (existente) {
+          if (texto === existente.texto && tam === existente.tam && color === existente.color) return;
+          const a: AnotTexto = { ...existente, texto, tam, color };
+          this.confirmar(this.anotaciones.map((z) => (z.id === a.id ? a : z)));
+        } else {
+          this.anadir({ id: nuevoId(), pagina, tipo: 'texto', x: x0, y: y0, texto, tam, color });
+        }
+      },
+      alCancelar: () => {
+        this.edicion = null;
+        this.capa.ocultar(null);
+      },
     });
-    window.setTimeout(() => area.focus(), 260);
+  }
+
+  /** Pasa al documento el texto que se esté escribiendo (antes de compartir, deshacer…). */
+  private terminarTexto(): void {
+    this.edicion?.terminar();
   }
 
   /* ------------------------------------------------------------------------ */
@@ -705,6 +715,7 @@ export class Editor {
   }
 
   async firmarConCertificado(): Promise<void> {
+    this.terminarTexto();
     if (!this.editable()) return this.avisoNoEditable();
     this.seleccionar(null);
     await flujoFirmaDigital(this);
@@ -799,6 +810,7 @@ export class Editor {
   }
 
   cerrar(): void {
+    this.terminarTexto();
     window.clearTimeout(this.temporizadorGuardado);
     void almacen.guardarAnotaciones(this.id, this.anotaciones).catch(() => undefined);
     document.removeEventListener('keydown', this.teclas);

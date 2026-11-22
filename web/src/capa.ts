@@ -34,6 +34,9 @@ export interface ContextoCapa {
   cajaFirmaLista(pagina: number, caja: { x: number; y: number; w: number; h: number }): void;
   editable(): boolean;
   avisoNoEditable(): void;
+  /** ¿Hay un texto escribiéndose sobre la página? Un toque fuera de él lo termina. */
+  editandoTexto(): boolean;
+  terminarTexto(): void;
 }
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -94,6 +97,8 @@ export class CapaAnotaciones {
   private gesto: Gesto | null = null;
   private svgs = new Map<number, SVGSVGElement>();
   private capasUi = new Map<number, HTMLDivElement>();
+  /** Texto que se está cambiando: no se dibuja (se ve el cuadro donde se escribe). */
+  private oculta: string | null = null;
 
   constructor(private ctx: ContextoCapa) {
     const raiz = ctx.visor.raiz;
@@ -127,6 +132,16 @@ export class CapaAnotaciones {
     this.capasUi.set(p.indice, ui);
   }
 
+  capaUi(indice: number): HTMLDivElement | undefined {
+    return this.capasUi.get(indice);
+  }
+
+  ocultar(id: string | null): void {
+    const antes = this.ctx.anotaciones().find((a) => a.id === (id ?? this.oculta));
+    this.oculta = id;
+    if (antes) this.dibujar(antes.pagina);
+  }
+
   reiniciar(): void {
     this.svgs.clear();
     this.capasUi.clear();
@@ -140,7 +155,7 @@ export class CapaAnotaciones {
     for (const i of paginas) {
       const svg = this.svgs.get(i);
       if (!svg) continue;
-      svg.innerHTML = todas.filter((a) => a.pagina === i).map(svgAnotacion).join('');
+      svg.innerHTML = todas.filter((a) => a.pagina === i && a.id !== this.oculta).map(svgAnotacion).join('');
     }
     this.dibujarSeleccion();
   }
@@ -149,7 +164,7 @@ export class CapaAnotaciones {
     for (const ui of this.capasUi.values()) ui.querySelector('.seleccion')?.remove();
     const id = this.ctx.seleccion();
     const a = id ? this.ctx.anotaciones().find((x) => x.id === id) : undefined;
-    if (!a) return;
+    if (!a || a.id === this.oculta) return;
     const p = this.ctx.visor.paginas[a.pagina];
     const ui = this.capasUi.get(a.pagina);
     if (!p || !ui) return;
@@ -217,6 +232,12 @@ export class CapaAnotaciones {
       return;
     }
     const objetivo = e.target as HTMLElement;
+    if (objetivo.closest('.editor-texto')) return; // dentro del cuadro de texto: se escribe
+    if (this.ctx.editandoTexto()) { // un toque fuera lo termina (y no hace nada más)
+      e.preventDefault();
+      this.ctx.terminarTexto();
+      return;
+    }
     if (objetivo.closest('.barra-seleccion')) return;
     const p = this.paginaDe(e);
     const h = this.ctx.herramienta();
@@ -398,7 +419,14 @@ export class CapaAnotaciones {
     const h = this.ctx.herramienta();
     const p = g.pagina;
     const { x, y } = this.ctx.visor.aUnidades(p, e.clientX, e.clientY);
-    if (h === 'texto') return this.ctx.textoEn(p.indice, x, y);
+    if (h === 'texto') { // tocar un texto que ya está lo abre para cambiarlo; si no, uno nuevo
+      const existente = [...this.ctx.anotaciones()].reverse().find((a): a is AnotTexto => {
+        if (a.pagina !== p.indice || a.tipo !== 'texto') return false;
+        const c = caja(a);
+        return x >= c.x - 4 && x <= c.x + c.w + 4 && y >= c.y - 4 && y <= c.y + c.h + 4;
+      });
+      return existente ? this.ctx.editarTexto(existente) : this.ctx.textoEn(p.indice, x, y);
+    }
     if (h === 'firma') return this.ctx.firmaEn(p.indice, x, y);
     // Mano: tocar una anotación la selecciona; tocar fuera, deselecciona.
     const z = p.div.getBoundingClientRect().width / p.ancho;

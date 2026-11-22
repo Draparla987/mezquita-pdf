@@ -77,6 +77,32 @@ async function cajaPagina(pagina, i = 0) {
   return pagina.locator('.pagina').nth(i).boundingBox();
 }
 
+/** Recuadro de los píxeles casi negros (la letra) de una zona de la pantalla, en píxeles de la captura. */
+async function tinta(pagina, clip) {
+  const b64 = (await pagina.screenshot({ clip })).toString('base64');
+  return pagina.evaluate(async (datos) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${datos}`;
+    await img.decode();
+    const lienzo = document.createElement('canvas');
+    lienzo.width = img.width;
+    lienzo.height = img.height;
+    const g = lienzo.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, img.width, img.height).data;
+    let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const i = (y * img.width + x) * 4;
+        if (Math.max(d[i], d[i + 1], d[i + 2]) < 90) {
+          x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+        }
+      }
+    }
+    return { x0, y0, x1, y1, escala: img.width / document.documentElement.clientWidth > 1.5 ? devicePixelRatio : 1 };
+  }, b64);
+}
+
 async function infoDoc(pagina) {
   return (await pagina.locator('.info-doc').textContent()) ?? '';
 }
@@ -125,12 +151,41 @@ async function recorrido(nombre, navegador, opcionesContexto, esMovil) {
     await arrastrar(p, c.x + c.width * 0.2, c.y + c.height * 0.5, c.x + c.width * 0.7, c.y + c.height * 0.55, 20);
     await p.getByRole('button', { name: 'Rectángulo' }).click();
     await arrastrar(p, c.x + c.width * 0.15, c.y + c.height * 0.62, c.x + c.width * 0.5, c.y + c.height * 0.75, 6);
+    // Texto: se escribe directamente sobre la página y se ve tal como queda
     await p.getByRole('button', { name: 'Texto' }).click();
     await p.mouse.click(c.x + c.width * 0.1, c.y + c.height * 0.3);
-    await p.locator('textarea').fill('Revisado en el iPhone — ñ, á, ¿?');
-    await p.getByRole('button', { name: 'Añadir' }).click();
-    await p.waitForTimeout(300);
+    const area = p.locator('.editor-texto textarea');
+    ok(await area.isVisible() && await area.evaluate((t) => t === document.activeElement),
+      'un toque con «Texto» abre un cuadro en ese sitio, listo para escribir');
+    await p.keyboard.type('Revisado en el iPhone — ñ, á, ¿?');
+    await p.keyboard.press('Enter');
+    await p.keyboard.type('Segunda línea');
+    await p.getByRole('button', { name: 'Letra más grande' }).click();
+    ok(await area.evaluate((t) => t === document.activeElement), 'cambiar el tamaño no cierra el teclado');
+    await p.screenshot({ path: join(capturas, `${nombre}-escribiendo.png`) });
+    const zona = await area.boundingBox();
+    const clip = { x: zona.x - 8, y: zona.y - 8, width: zona.width + 16, height: zona.height + 16 };
+    await p.evaluate(() => {
+      const e = document.querySelector('.editor-texto');
+      Object.assign(e.style, { outline: 'none', background: 'none', boxShadow: 'none' });
+      e.querySelector('.barra-texto').style.display = 'none';
+      e.querySelector('textarea').style.caretColor = 'transparent';
+    });
+    const antes = await tinta(p, clip);
+    await p.evaluate(() => { document.querySelector('.barra-texto').style.display = ''; });
+    await p.getByRole('button', { name: 'Listo' }).click();
+    await p.waitForTimeout(200);
+    const despues = await tinta(p, clip);
+    const dif = Math.max(...['x0', 'y0', 'x1', 'y1'].map((k) => Math.abs(antes[k] - despues[k]))) / antes.escala;
+    ok(antes.x1 > antes.x0 && dif <= 2.5, `lo que se ve al escribir es lo que queda (diferencia ${dif.toFixed(1)} px)`);
     ok((await infoDoc(p)).includes('4 anotaciones'), `cuatro anotaciones creadas («${await infoDoc(p)}»)`);
+    // Tocar el texto con «Texto» lo abre para cambiarlo; Esc lo deja como estaba
+    await p.mouse.click(zona.x + 10, zona.y + 6);
+    ok(await area.isVisible() && (await area.inputValue()).startsWith('Revisado'), 'tocar un texto lo abre para cambiarlo');
+    await p.keyboard.type(' (no)');
+    await p.keyboard.press('Escape');
+    ok(!(await area.isVisible()) && !(await p.locator('.capa-anotaciones text').last().textContent()).includes('(no)'),
+      'Esc cancela el cambio');
     await p.screenshot({ path: join(capturas, `${nombre}-anotaciones.png`) });
     await p.getByRole('button', { name: 'Deshacer' }).click();
     ok((await infoDoc(p)).includes('3 anotaciones'), 'deshacer elimina la última');
