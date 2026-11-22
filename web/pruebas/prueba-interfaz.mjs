@@ -186,6 +186,20 @@ async function recorrido(nombre, navegador, opcionesContexto, esMovil) {
     await p.keyboard.press('Escape');
     ok(!(await area.isVisible()) && !(await p.locator('.capa-anotaciones text').last().textContent()).includes('(no)'),
       'Esc cancela el cambio');
+    // Arrastrar un texto añadido con «Texto» lo mueve (sin abrirlo)
+    const xTexto = async () => Number(await p.locator('.capa-anotaciones text tspan').last().getAttribute('x'));
+    const x0 = await xTexto();
+    await arrastrar(p, zona.x + 12, zona.y + 8, zona.x + 72, zona.y + 48, 6);
+    const x1 = await xTexto();
+    ok(!(await area.isVisible()) && x1 - x0 > 20, `arrastrar un texto añadido lo mueve, también con «Texto» (${(x1 - x0).toFixed(0)} pt)`);
+    await p.getByRole('button', { name: 'Deshacer' }).click();
+    ok(Math.abs(await xTexto() - x0) < 0.5, 'deshacer lo devuelve a su sitio');
+    // Un color de la barra se puede pulsar sin que se cierre el cuadro
+    await p.mouse.click(zona.x + 12, zona.y + 8);
+    await p.locator('.barra-texto [aria-label^="Color"]').nth(3).click();
+    ok(await area.isVisible() && (await area.evaluate((t) => getComputedStyle(t).color)) === 'rgb(28, 126, 214)',
+      'otro color: el texto cambia y se sigue escribiendo');
+    await p.keyboard.press('Escape');
     await p.screenshot({ path: join(capturas, `${nombre}-anotaciones.png`) });
     await p.getByRole('button', { name: 'Deshacer' }).click();
     ok((await infoDoc(p)).includes('3 anotaciones'), 'deshacer elimina la última');

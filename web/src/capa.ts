@@ -142,6 +142,15 @@ export class CapaAnotaciones {
     if (antes) this.dibujar(antes.pagina);
   }
 
+  /** El texto añadido que hay en ese punto de la página (el de encima), si lo hay. */
+  private textoBajo(p: PaginaVisor, x: number, y: number): AnotTexto | undefined {
+    return [...this.ctx.anotaciones()].reverse().find((a): a is AnotTexto => {
+      if (a.pagina !== p.indice || a.tipo !== 'texto') return false;
+      const c = caja(a);
+      return x >= c.x - 4 && x <= c.x + c.w + 4 && y >= c.y - 4 && y <= c.y + c.h + 4;
+    });
+  }
+
   reiniciar(): void {
     this.svgs.clear();
     this.capasUi.clear();
@@ -296,6 +305,10 @@ export class CapaAnotaciones {
       svg.append(vista);
       this.gesto = { ...base, tipo: 'caja', vista };
       this.actualizarVista();
+    } else if (h === 'texto' && this.textoBajo(p, x, y)) {
+      // Un texto añadido: arrastrarlo lo mueve; un toque, sin moverlo, lo abre para cambiarlo
+      this.ctx.inicioCambio();
+      this.gesto = { ...base, tipo: 'mover', original: this.textoBajo(p, x, y) };
     } else {
       this.gesto = { ...base, tipo: 'toque' };
     }
@@ -410,7 +423,9 @@ export class CapaAnotaciones {
       case 'mover':
       case 'redimensionar':
         this.ctx.finCambio();
-        if (!g.movido && g.tipo === 'mover' && g.original?.tipo === 'texto' && e.detail >= 2) this.ctx.editarTexto(g.original);
+        if (!g.movido && g.tipo === 'mover' && g.original?.tipo === 'texto' && (h === 'texto' || e.detail >= 2)) {
+          this.ctx.editarTexto(g.original);
+        }
         return;
     }
   }
@@ -420,11 +435,7 @@ export class CapaAnotaciones {
     const p = g.pagina;
     const { x, y } = this.ctx.visor.aUnidades(p, e.clientX, e.clientY);
     if (h === 'texto') { // tocar un texto que ya está lo abre para cambiarlo; si no, uno nuevo
-      const existente = [...this.ctx.anotaciones()].reverse().find((a): a is AnotTexto => {
-        if (a.pagina !== p.indice || a.tipo !== 'texto') return false;
-        const c = caja(a);
-        return x >= c.x - 4 && x <= c.x + c.w + 4 && y >= c.y - 4 && y <= c.y + c.h + 4;
-      });
+      const existente = this.textoBajo(p, x, y);
       return existente ? this.ctx.editarTexto(existente) : this.ctx.textoEn(p.indice, x, y);
     }
     if (h === 'firma') return this.ctx.firmaEn(p.indice, x, y);

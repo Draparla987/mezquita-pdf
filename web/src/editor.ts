@@ -638,7 +638,9 @@ export class Editor {
           const a: AnotTexto = { ...existente, texto, tam, color };
           this.confirmar(this.anotaciones.map((z) => (z.id === a.id ? a : z)));
         } else {
-          this.anadir({ id: nuevoId(), pagina, tipo: 'texto', x: x0, y: y0, texto, tam, color });
+          const nuevo: AnotTexto = { id: nuevoId(), pagina, tipo: 'texto', x: x0, y: y0, texto, tam, color };
+          this.anadir(nuevo);
+          this.seleccionar(nuevo.id); // con su recuadro, para moverlo arrastrándolo
         }
       },
       alCancelar: () => {
