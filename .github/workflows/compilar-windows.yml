@@ -51,9 +51,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python pruebas/prueba_mover.py
 
+      # Con la pantalla real de Windows: sin ella (offscreen), Qt no carga Arial ni las demás letras del sistema
       - name: Escribir texto sobre la página (lo que se ve es lo que queda)
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: python pruebas/prueba_texto.py
 
       - name: Extensión de Chrome (código fuente)

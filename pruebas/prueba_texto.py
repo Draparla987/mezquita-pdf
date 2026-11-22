@@ -4,6 +4,7 @@ Hace clic con la herramienta Texto, escribe dos líneas y compara dónde están 
 de edición y en el PDF ya guardado. Prueba también cambiar un texto añadido, cancelar con Esc y
 cambiar una línea del PDF con «Editar texto».
 Uso:  QT_QPA_PLATFORM=offscreen python pruebas/prueba_texto.py [carpeta_para_capturas]
+(En Windows, sin «offscreen»: así Qt no carga las letras del sistema y el cuadro usaría otra.)
 """
 
 import os
@@ -19,7 +20,7 @@ CAPTURAS = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 
 import pymupdf  # noqa: E402
 from PySide6.QtCore import QEvent, QPoint, QRect, QSettings, Qt  # noqa: E402
-from PySide6.QtGui import QImage, QKeyEvent  # noqa: E402
+from PySide6.QtGui import QFontInfo, QImage, QKeyEvent  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -42,6 +43,8 @@ d.save(TMP / "doc.pdf")
 v = VentanaPrincipal()
 v.resize(1200, 900)
 v.show()
+v.activateWindow()
+QTest.qWaitForWindowActive(v, 2000)
 assert v.abrir_ruta(str(TMP / "doc.pdf"))
 QTest.qWait(200)
 vista = v.vista
@@ -51,7 +54,9 @@ w = vista.paginas[0]
 
 
 def tinta(img: QImage, zona: QRect, oscuro: int = 90) -> QRect:
-    """Recuadro de los píxeles casi negros (la letra) dentro de `zona`."""
+    """Recuadro de los píxeles casi negros (la letra) dentro de `zona` (en píxeles lógicos)."""
+    r = img.devicePixelRatio()
+    zona = QRect(round(zona.x() * r), round(zona.y() * r), round(zona.width() * r), round(zona.height() * r))
     x0 = y0 = 10 ** 6
     x1 = y1 = -1
     for y in range(zona.top(), zona.bottom()):
@@ -59,7 +64,7 @@ def tinta(img: QImage, zona: QRect, oscuro: int = 90) -> QRect:
             c = img.pixelColor(x, y)
             if max(c.red(), c.green(), c.blue()) < oscuro:
                 x0, y0, x1, y1 = min(x0, x), min(y0, y), max(x1, x), max(y1, y)
-    return QRect(QPoint(x0, y0), QPoint(x1, y1))
+    return QRect(QPoint(round(x0 / r), round(y0 / r)), QPoint(round(x1 / r), round(y1 / r)))
 
 
 def escribir(widget, texto: str) -> None:
@@ -78,7 +83,9 @@ v.set_herramienta(Herramienta.TEXTO)
 clic = w.punto_pantalla(pymupdf.Point(100, 250)).toPoint()
 QTest.mouseClick(w, Qt.LeftButton, Qt.NoModifier, clic)
 e = vista._edicion
-assert e is not None and e.cuadro.hasFocus(), "el clic abre un cuadro para escribir"
+assert e is not None and (e.cuadro.hasFocus() or not v.isActiveWindow()), "el clic abre un cuadro para escribir"
+info = QFontInfo(e.cuadro.font())
+print(f"  · letra en pantalla: {info.family()} ({info.pixelSize()} px)")
 escribir(e.cuadro, "Hola, ¿qué tal?")
 QTest.keyClick(e.cuadro, Qt.Key_Return)
 escribir(e.cuadro, "Segunda línea con ñ y €")
