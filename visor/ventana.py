@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import os
 from pathlib import Path
 
@@ -17,21 +16,18 @@ from PySide6.QtWidgets import (
     QStackedWidget, QStyle, QTabBar, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
-from . import ajustes, compartir, marcas, mover, sistema, tema
+from . import ajustes, compartir, marcas, sistema, tema
 from . import firma_digital as fd
 from .combinar import FILTRO as FILTRO_INSERTAR, DialogoCombinar, abrir_archivo
 from .componentes import (
     MARGEN_VENTANA, BarraPestanas, BotonRail, DialogoWhatsApp, LineaRail, MuestraColor, PantallaBienvenida, Pildora, Toast,
     area_disponible, encajar_en_pantalla, separador_vertical,
 )
-from .dialogos import (
-    DialogoContrasena, DialogoFirmaDigital, DialogoFirmas, DialogoTexto, DialogoVerificacion,
-    FUENTES_PDF,
-)
+from .dialogos import DialogoContrasena, DialogoFirmaDigital, DialogoFirmas, DialogoVerificacion
 from .documento import Documento, parsear_rango as _parsear_rango
 from .miniaturas import ListaMiniaturas, tam_miniatura
 from .plataforma import ES_MAC, ES_WINDOWS, NOMBRE_EXPLORADOR, teclas
-from .vista import Herramienta, VistaPDF, a_rgb
+from .vista import Herramienta, VistaPDF
 
 FILTRO_PDF = "Documentos PDF (*.pdf);;Todos los archivos (*)"
 MAX_RECIENTES = 10
@@ -75,7 +71,7 @@ PISTAS = {
     Herramienta.RESALTAR: "Arrastra sobre el texto para resaltarlo",
     Herramienta.SUBRAYAR: "Arrastra sobre el texto para subrayarlo",
     Herramienta.TACHAR: "Arrastra sobre el texto para tacharlo",
-    Herramienta.TEXTO: "Haz clic donde quieras escribir",
+    Herramienta.TEXTO: "Haz clic donde quieras escribir · clic en un texto añadido para cambiarlo",
     Herramienta.NOTA: "Haz clic donde quieras dejar la nota",
     Herramienta.DIBUJO: "Dibuja con el ratón o el trackpad",
     Herramienta.RECTANGULO: "Arrastra para dibujar",
@@ -822,9 +818,9 @@ class VentanaPrincipal(QMainWindow):
         v.documento_modificado.connect(lambda: self._doc_modificado(p))
         v.mensaje.connect(si_se_ve(self.aviso))
         for senal, funcion in (
-            (v.pedir_texto, self._anadir_texto), (v.pedir_nota, self._anadir_nota),
+            (v.pedir_nota, self._anadir_nota),
             (v.pedir_imagen, self._anadir_imagen), (v.pedir_firma_manuscrita, self._colocar_firma),
-            (v.pedir_firma_digital, self._firmar_digital), (v.pedir_editar_texto, self._editar_linea),
+            (v.pedir_firma_digital, self._firmar_digital),
             (v.pedir_campo_formulario, self._editar_campo), (v.pedir_editar_anotacion, self._editar_anotacion),
         ):
             senal.connect(si_se_ve(funcion))
@@ -900,7 +896,9 @@ class VentanaPrincipal(QMainWindow):
         self.aviso("Listo: los PDF se abrirán con Mezquita PDF al hacer doble clic", 5)
 
     def _escape(self) -> None:
-        if self.campo_buscar.hasFocus():
+        if self.vista.editando():  # p. ej. con el foco en el tamaño de la letra del texto que se escribe
+            self.vista.cancelar_edicion()
+        elif self.campo_buscar.hasFocus():
             self.campo_buscar.clear()
             self.vista.setFocus()
         elif self.vista.herramienta != Herramienta.SELECCIONAR:
@@ -1199,6 +1197,7 @@ class VentanaPrincipal(QMainWindow):
         self._banner_interior.setVisible(True)
 
     def guardar(self) -> bool:
+        self.vista.terminar_edicion()  # el texto que se esté escribiendo también se guarda
         if self.documento is None:
             return False
         if not self.documento.ruta:
@@ -1217,6 +1216,7 @@ class VentanaPrincipal(QMainWindow):
         return self._guardar_en(self.documento.ruta)
 
     def guardar_como(self) -> bool:
+        self.vista.terminar_edicion()
         if self.documento is None:
             return False
         carpeta = self.ajustes.value("ultima_carpeta", str(Path.home()))
@@ -1244,6 +1244,7 @@ class VentanaPrincipal(QMainWindow):
         return True
 
     def _confirmar_descartar(self) -> bool:
+        self.vista.terminar_edicion()
         if self.documento is None or not self.documento.modificado:
             return True
         r = QMessageBox.question(
@@ -1270,6 +1271,7 @@ class VentanaPrincipal(QMainWindow):
         puente_claude.mostrar_dialogo(self)
 
     def closeEvent(self, ev) -> None:
+        self.vista.terminar_edicion()
         for p in self.pestanas():
             if p.documento.modificado:
                 self.elegir_pestana(p)  # que se vea de qué documento se pregunta
@@ -1317,6 +1319,7 @@ class VentanaPrincipal(QMainWindow):
             return
         herramienta = self.vista.herramienta  # la herramienta en uso se mantiene al cambiar de documento
         if anterior is not None:
+            anterior.vista.terminar_edicion()
             anterior.busqueda = self.campo_buscar.text()
             anterior.ultima_busqueda = self._ultima_busqueda
         self.pestana = nueva
@@ -1376,6 +1379,7 @@ class VentanaPrincipal(QMainWindow):
         """Cierra el documento de la pestaña (preguntando si tiene cambios). False si se cancela."""
         if self._indice(p) < 0:
             return False
+        p.vista.terminar_edicion()
         if confirmar and p.documento.modificado:
             self.elegir_pestana(p)
             if not self._confirmar_descartar():
@@ -1670,6 +1674,7 @@ class VentanaPrincipal(QMainWindow):
             self.insertar_archivos(rutas, self.vista.pagina_actual() + 1 if posicion is None else posicion)
 
     def combinar(self) -> None:
+        self.vista.terminar_edicion()
         """Une varios PDF en uno nuevo (empezando por el documento abierto, si lo hay)."""
         dlg = DialogoCombinar(self, actual=self.documento)
         if dlg.exec() != QDialog.Accepted or dlg.resultado is None:
@@ -1679,6 +1684,7 @@ class VentanaPrincipal(QMainWindow):
         ventana.aviso(teclas(f"Documento combinado: {nuevo.num_paginas} páginas. Guárdalo con ⌘S"), 6)
 
     def extraer_paginas(self, rango: str | None = None) -> None:
+        self.vista.terminar_edicion()
         if self.documento is None:
             return
         n = self.documento.num_paginas
@@ -1723,10 +1729,12 @@ class VentanaPrincipal(QMainWindow):
     # Deshacer / rehacer
     # ------------------------------------------------------------------
     def deshacer(self) -> None:
+        self.vista.terminar_edicion()
         if self.documento and self.documento.deshacer():
             self._tras_cambio_estructura()
 
     def rehacer(self) -> None:
+        self.vista.terminar_edicion()
         if self.documento and self.documento.rehacer():
             self._tras_cambio_estructura()
 
@@ -1768,49 +1776,18 @@ class VentanaPrincipal(QMainWindow):
     # ------------------------------------------------------------------
     # Edición: texto, notas, imágenes, formularios
     # ------------------------------------------------------------------
-    def _anadir_texto(self, indice: int, punto: pymupdf.Point) -> None:
-        dlg = DialogoTexto(self, "Añadir texto",
-                           tamano=float(self.ajustes.value("texto/tamano", 12)),
-                           color=QColor(self.ajustes.value("texto/color", "#000000")),
-                           fuente=self.ajustes.value("texto/fuente", "Helvetica"))
-        if dlg.exec() != QDialog.Accepted or not dlg.texto.strip():
-            return
-        self.ajustes.setValue("texto/tamano", dlg.tamano)
-        self.ajustes.setValue("texto/color", dlg.color.name())
-        self.ajustes.setValue("texto/fuente", dlg.fuente)
-        pagina = self.documento.pagina(indice)
-        fuente_corta, fuente_annot = FUENTES_PDF[dlg.fuente]
-        lineas = dlg.texto.splitlines() or [""]
-        # Margen generoso: el cuadro de la anotación añade relleno interno
-        ancho = max(pymupdf.get_text_length(l, fontname=fuente_corta, fontsize=dlg.tamano) for l in lineas) * 1.08 + dlg.tamano * 1.5
-        alto = len(lineas) * dlg.tamano * 1.3 + dlg.tamano * 0.9
-        if pagina.rotation in (90, 270):
-            ancho, alto = alto, ancho
-        r = pymupdf.Rect(punto.x, punto.y - dlg.tamano * 0.3, punto.x + ancho, punto.y - dlg.tamano * 0.3 + alto)
-        self.documento.instantanea()
-        annot = pagina.add_freetext_annot(
-            r, dlg.texto, fontsize=dlg.tamano, fontname=fuente_annot,
-            text_color=a_rgb(dlg.color), rotate=pagina.rotation,
-        )
-        annot.set_border(width=0)
-        annot.update()
-        self.vista._modificado(indice)
-
     def _editar_anotacion(self, indice: int, xref: int) -> None:
         pagina = self.documento.pagina(indice)
         annot = pagina.load_annot(xref)
         if annot is None:
             return
+        if annot.type[0] == pymupdf.PDF_ANNOT_FREE_TEXT:  # se escribe directamente sobre la página
+            self.vista.editar_cuadro_texto(indice, xref)
+            return
         contenido = annot.info.get("content", "")
-        if annot.type[0] == pymupdf.PDF_ANNOT_FREE_TEXT:
-            dlg = DialogoTexto(self, "Editar texto", texto=contenido, mostrar_formato=False)
-            if dlg.exec() != QDialog.Accepted:
-                return
-            nuevo = dlg.texto
-        else:
-            nuevo, ok = QInputDialog.getMultiLineText(self, "Nota", "Texto de la nota:", contenido)
-            if not ok:
-                return
+        nuevo, ok = QInputDialog.getMultiLineText(self, "Nota", "Texto de la nota:", contenido)
+        if not ok:
+            return
         self.documento.instantanea()
         annot = self.documento.pagina(indice).load_annot(xref)
         annot.set_info(content=nuevo)
@@ -1895,43 +1872,6 @@ class VentanaPrincipal(QMainWindow):
         campo.update()
         self.vista._modificado(indice)
 
-    def _editar_linea(self, indice: int, linea: dict) -> None:
-        estandar = mover.fuente_estandar(linea["fuente"], linea["flags"])
-        familia = {"he": "Helvetica", "ti": "Times", "co": "Courier"}[estandar[:2]]
-        negrita = estandar.endswith(("bo", "bi"))
-        cursiva = estandar.endswith(("it", "bi"))
-        c = linea["color"]
-        color = QColor((c >> 16) & 255, (c >> 8) & 255, c & 255)
-        dlg = DialogoTexto(self, "Editar texto del PDF", texto=linea["texto"],
-                           tamano=round(linea["tamano"], 1), color=color, fuente=familia)
-        if dlg.exec() != QDialog.Accepted or dlg.texto == linea["texto"]:
-            return
-        base = {"Helvetica": "he", "Times": "ti", "Courier": "co"}[dlg.fuente]
-        if negrita and cursiva:
-            fuente = base + "bi"
-        elif negrita:
-            fuente = base + "bo"
-        elif cursiva:
-            fuente = base + "it"
-        else:
-            fuente = {"he": "helv", "ti": "tiro", "co": "cour"}[base]
-        pagina = self.documento.pagina(indice)
-        r = pymupdf.Rect(linea["rect"])
-        margen = r.height * 0.15
-        r.y0 += margen
-        r.y1 -= margen
-        self.documento.instantanea()
-        pagina.add_redact_annot(r, fill=False)
-        pagina.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
-                                graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
-        dx, dy = linea["dir"]
-        angulo = round(math.degrees(math.atan2(-dy, dx)))
-        mover.escribir(pagina, linea["origen"], dlg.texto, fuente, dlg.tamano, a_rgb(dlg.color), angulo)
-        self.vista._modificado(indice)
-
-    # ------------------------------------------------------------------
-    # Firmas
-    # ------------------------------------------------------------------
     def elegir_firma_manuscrita(self) -> None:
         dlg = DialogoFirmas(self)
         if dlg.exec() == QDialog.Accepted and dlg.ruta_elegida:
@@ -2135,6 +2075,7 @@ class VentanaPrincipal(QMainWindow):
     # Compartir
     # ------------------------------------------------------------------
     def _archivo_para_compartir(self) -> str | None:
+        self.vista.terminar_edicion()
         """Devuelve la ruta del PDF guardado, pidiendo guardar si hay cambios pendientes."""
         if self.documento is None:
             return None
@@ -2236,6 +2177,7 @@ class VentanaPrincipal(QMainWindow):
     # Imprimir y propiedades
     # ------------------------------------------------------------------
     def imprimir(self) -> None:
+        self.vista.terminar_edicion()
         if self.documento is None:
             return
         impresora = QPrinter(QPrinter.HighResolution)

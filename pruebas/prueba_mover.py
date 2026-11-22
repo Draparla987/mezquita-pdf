@@ -57,9 +57,6 @@ vista.set_zoom(1.0)
 QTest.qWait(100)
 w = vista.paginas[0]
 pag = lambda: v.documento.pagina(0)  # noqa: E731
-editados = []
-vista.pedir_editar_texto.disconnect()
-vista.pedir_editar_texto.connect(lambda i, linea: editados.append(linea["texto"]))
 
 
 def pantalla(x: float, y: float) -> QPoint:
@@ -86,11 +83,13 @@ def spans():
     return [s for b in pag().get_text("dict")["blocks"] for l in b.get("lines", []) for s in l["spans"]]
 
 
-# 1. Editar texto: un clic sigue abriendo la edición; arrastrar mueve la línea
+# 1. Editar texto: un clic abre la edición sobre la línea (Esc la deja como estaba); arrastrar la mueve
 v.set_herramienta(Herramienta.EDITAR_TEXTO)
 QTest.mouseClick(w, Qt.LeftButton, Qt.NoModifier, pantalla(100, 136))
-assert editados == ["Firmado en Córdoba"], editados
-ok("un clic en una línea abre su edición, como antes")
+assert vista._edicion is not None and vista._edicion.texto() == "Firmado en Córdoba"
+QTest.keyClick(vista._edicion.cuadro, Qt.Key_Escape)
+assert vista._edicion is None and palabras("Córdoba") and not v.documento.puede_deshacer()
+ok("un clic en una línea abre su edición sobre la página; Esc la deja como estaba")
 arrastrar(pantalla(100, 96), pantalla(250, 296), captura="arrastrando_linea.png")
 precio = next(s for s in spans() if s["text"].startswith("Precio"))
 euros = next(s for s in spans() if "€" in s["text"])

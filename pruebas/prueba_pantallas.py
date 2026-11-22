@@ -37,7 +37,7 @@ from visor import firma_digital as fd  # noqa: E402
 from visor.combinar import DialogoCombinar  # noqa: E402
 from visor.componentes import DialogoWhatsApp  # noqa: E402
 from visor.dialogos import (  # noqa: E402
-    DialogoContrasena, DialogoFirmaDigital, DialogoFirmas, DialogoNuevaFirma, DialogoTexto,
+    DialogoContrasena, DialogoFirmaDigital, DialogoFirmas, DialogoNuevaFirma,
     DialogoVerificacion, carpeta_datos,
 )
 from visor.puente_claude import DialogoClaude  # noqa: E402
@@ -87,7 +87,6 @@ ventanas = [
     ("combinar documentos", lambda: DialogoCombinar(v, actual=v.documento)),
     ("nueva firma manuscrita", lambda: DialogoNuevaFirma(v)),
     ("mis firmas", lambda: DialogoFirmas(v, seleccionar=False)),
-    ("añadir texto", lambda: DialogoTexto(v)),
     ("verificar firmas", lambda: DialogoVerificacion(fd.verificar_firmas(firmado), v)),
     ("contraseña", lambda: DialogoContrasena("documento.pdf", v)),
     ("enviar por WhatsApp", lambda: DialogoWhatsApp(ejemplo, v)),

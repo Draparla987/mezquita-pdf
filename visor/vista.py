@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import OrderedDict
 from enum import Enum, auto
 
@@ -18,6 +19,9 @@ from . import mover, tema
 from .documento import Documento
 from .mover import tamano_real
 from .plataforma import teclas
+from .texto_en_linea import (
+    FUENTES, PRIMERA_BASE, EdicionTexto, Estilo, estilo_de_anotacion, estilo_guardado, guardar_estilo,
+)
 
 FLECHAS = {Qt.Key_Left: (-1, 0), Qt.Key_Right: (1, 0), Qt.Key_Up: (0, -1), Qt.Key_Down: (0, 1)}
 TAM_ASA = 9  # px: esquinas para cambiar el tamaño de una anotación
@@ -156,14 +160,12 @@ class VistaPDF(QScrollArea):
     documento_modificado = Signal()
     mensaje = Signal(str)
     # Peticiones a la ventana principal (necesitan diálogos)
-    pedir_texto = Signal(int, object)          # página, punto PDF
-    pedir_nota = Signal(int, object)
+    pedir_nota = Signal(int, object)           # página, punto PDF
     pedir_imagen = Signal(int, object)         # página, rect PDF
     pedir_firma_manuscrita = Signal(int, object)
     pedir_firma_digital = Signal(int, object)
-    pedir_editar_texto = Signal(int, object)   # página, info de la línea
     pedir_campo_formulario = Signal(int, object)
-    pedir_editar_anotacion = Signal(int, int)  # página, xref
+    pedir_editar_anotacion = Signal(int, int)  # página, xref de una nota
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -191,6 +193,7 @@ class VistaPDF(QScrollArea):
         self._lineas_sel: tuple[int, list[dict]] | None = None
         self._anot_sel: tuple[int, int] | None = None  # (página, xref)
         self._arrastre: dict | None = None
+        self._edicion: EdicionTexto | None = None  # texto que se está escribiendo sobre la página
 
         # Búsqueda
         self.resultados: list[tuple[int, pymupdf.Rect]] = []
@@ -214,12 +217,18 @@ class VistaPDF(QScrollArea):
     # Documento
     # ------------------------------------------------------------------
     def set_documento(self, documento: Documento | None) -> None:
+        self.terminar_edicion()
+        if self.documento is not None and self.documento.antes_de_cambiar == self.terminar_edicion:
+            self.documento.antes_de_cambiar = None
         self.documento = documento
+        if documento is not None:  # cualquier cambio del documento guarda antes el texto a medio escribir
+            documento.antes_de_cambiar = self.terminar_edicion
         self.limpiar_busqueda()
         self.recargar(conservar_posicion=False)
 
     def recargar(self, conservar_posicion: bool = True, pagina: int | None = None) -> None:
         """Reconstruye las páginas tras un cambio en el documento (y va a `pagina`, si se indica)."""
+        self.terminar_edicion()
         if pagina is None:
             pagina = self.pagina_actual() if conservar_posicion else 0
         else:
@@ -386,6 +395,7 @@ class VistaPDF(QScrollArea):
     # Herramientas
     # ------------------------------------------------------------------
     def set_herramienta(self, h: Herramienta) -> None:
+        self.terminar_edicion()
         self.herramienta = h
         self._seleccion = None
         self._hover_linea = None
@@ -566,9 +576,8 @@ class VistaPDF(QScrollArea):
         a, self._arrastre = self._arrastre, None
         tipo = a["tipo"]
         if tipo == "lineas":
-            if es_click:  # un clic en una línea: cambiar su texto, como siempre
-                self._lineas_sel = (w.indice, [a["linea"]])
-                self.pedir_editar_texto.emit(w.indice, a["linea"])
+            if es_click:  # un clic en una línea: cambiar su texto escribiendo sobre ella
+                self.editar_linea(w.indice, a["linea"])
             else:
                 self._mover_lineas_sel(*a.get("d", (0, 0)))
         elif tipo == "anot":
@@ -642,6 +651,10 @@ class VistaPDF(QScrollArea):
     # --- Eventos de ratón ------------------------------------------------
     def raton_pulsado(self, w: PaginaWidget, ev) -> None:
         if ev.button() != Qt.LeftButton or self.documento is None:
+            return
+        if self._edicion is not None:  # un clic fuera del cuadro de texto lo termina (y nada más)
+            self.terminar_edicion()
+            self._inicio = None
             return
         pos = ev.position()
         p = w.a_pdf(pos)
@@ -791,7 +804,11 @@ class VistaPDF(QScrollArea):
                 self._modificado(w.indice)
 
         elif h == Herramienta.TEXTO:
-            self.pedir_texto.emit(w.indice, p0)
+            annot = self._anotacion_en(w.indice, p0)
+            if annot is not None and annot.type[0] == pymupdf.PDF_ANNOT_FREE_TEXT:
+                self.editar_cuadro_texto(w.indice, annot.xref)  # clic en un texto añadido: cambiarlo
+            else:
+                self.escribir_texto(w, p0)
 
         elif h == Herramienta.NOTA:
             self.pedir_nota.emit(w.indice, p0)
@@ -835,7 +852,7 @@ class VistaPDF(QScrollArea):
         elif h == Herramienta.EDITAR_TEXTO:
             for linea in self._lineas_de(w.indice):
                 if linea["rect"].contains(p0):
-                    self.pedir_editar_texto.emit(w.indice, linea)
+                    self.editar_linea(w.indice, linea)
                     break
 
         elif h == Herramienta.IMAGEN:
@@ -861,11 +878,15 @@ class VistaPDF(QScrollArea):
         w.update()
 
     def doble_click(self, w: PaginaWidget, ev) -> None:
-        if self.documento is None:
+        if self.documento is None or self._edicion is not None:  # ya se está escribiendo (p. ej. herramienta Texto)
             return
         p = w.a_pdf(ev.position())
         annot = self._anotacion_en(w.indice, p)
-        if annot is not None and annot.type[0] in (pymupdf.PDF_ANNOT_FREE_TEXT, pymupdf.PDF_ANNOT_TEXT):
+        if annot is None:
+            return
+        if annot.type[0] == pymupdf.PDF_ANNOT_FREE_TEXT:
+            self.editar_cuadro_texto(w.indice, annot.xref)
+        elif annot.type[0] == pymupdf.PDF_ANNOT_TEXT:
             self.pedir_editar_anotacion.emit(w.indice, annot.xref)
 
     def menu_contextual(self, w: PaginaWidget, ev) -> None:
@@ -881,14 +902,143 @@ class VistaPDF(QScrollArea):
         if annot is not None:
             xref = annot.xref
             tipo = annot.type[0]
-            if tipo in (pymupdf.PDF_ANNOT_FREE_TEXT, pymupdf.PDF_ANNOT_TEXT):
-                menu.addAction("Editar texto de la anotación…",
+            if tipo == pymupdf.PDF_ANNOT_FREE_TEXT:
+                menu.addAction("Cambiar el texto", lambda: self.editar_cuadro_texto(w.indice, xref))
+            elif tipo == pymupdf.PDF_ANNOT_TEXT:
+                menu.addAction("Cambiar el texto de la nota…",
                                lambda: self.pedir_editar_anotacion.emit(w.indice, xref))
             menu.addAction("Eliminar anotación", lambda: self.eliminar_anotacion(w.indice, xref))
             menu.addSeparator()
         menu.addAction("Girar página a la derecha", lambda: self.window().girar_pagina(90, [w.indice]))
         menu.addAction("Eliminar esta página", lambda: self.window().eliminar_paginas([w.indice]))
         menu.exec(ev.globalPos())
+
+    # ------------------------------------------------------------------
+    # Texto escrito directamente sobre la página
+    # ------------------------------------------------------------------
+    def editando(self) -> bool:
+        return self._edicion is not None
+
+    def terminar_edicion(self) -> None:
+        """Guarda el texto que se esté escribiendo (antes de guardar, de cambiar de herramienta…)."""
+        if self._edicion is not None:
+            self._edicion.terminar()
+
+    def cancelar_edicion(self) -> None:
+        if self._edicion is not None:
+            self._edicion.cancelar()
+
+    def _empezar_edicion(self, w: PaginaWidget, **opciones) -> None:
+        self.terminar_edicion()
+        self._seleccion = None
+        self._lineas_sel = self._anot_sel = self._arrastre = None
+        self._hover_linea = self._hover_anot = None
+        self._edicion = EdicionTexto(self, w, **opciones)
+        w.update()
+
+    def _ancla(self, indice: int, p: pymupdf.Point, subir: float) -> QPointF:
+        """Punto del PDF → puntos de la página tal como se ve (girada), `subir` puntos más arriba."""
+        q = pymupdf.Point(p) * self.documento.pagina(indice).rotation_matrix
+        return QPointF(q.x, q.y - subir)
+
+    def escribir_texto(self, w: PaginaWidget, p: pymupdf.Point) -> None:
+        """Herramienta Texto: un cuadro justo donde se ha hecho clic, para escribir sobre la página."""
+        indice, estilo = w.indice, estilo_guardado()
+
+        def poner(texto: str, estilo: Estilo, rect: pymupdf.Rect) -> None:
+            guardar_estilo(estilo)
+            if not texto.strip():
+                return
+            self.documento.instantanea()
+            pagina = self.documento.pagina(indice)
+            annot = pagina.add_freetext_annot(rect, texto, fontsize=estilo.tamano,
+                                              fontname=FUENTES[estilo.fuente][1], text_color=estilo.rgb,
+                                              rotate=pagina.rotation)
+            annot.set_border(width=0)
+            annot.update()
+            self._modificado(indice)
+
+        # El clic queda a media altura de la primera línea, donde aparece el cursor
+        self._empezar_edicion(w, texto="", estilo=estilo, ancla=self._ancla(indice, p, 0.5 * estilo.tamano),
+                              al_terminar=poner, al_cancelar=lambda: None)
+
+    def editar_cuadro_texto(self, indice: int, xref: int) -> None:
+        """Cambia un texto añadido escribiendo sobre él (mientras, el original no se dibuja)."""
+        self.terminar_edicion()
+        pagina = self.documento.pagina(indice)
+        annot = pagina.load_annot(xref)
+        if annot is None or annot.type[0] != pymupdf.PDF_ANNOT_FREE_TEXT:
+            return
+        estilo0 = estilo_de_anotacion(self.documento.doc, annot)
+        texto0 = (annot.info or {}).get("content", "")
+        visto = pymupdf.Rect(annot.rect) * pagina.rotation_matrix
+        visto.normalize()
+        previo = self.documento.empezar_cambio()
+        annot.set_flags(annot.flags | pymupdf.PDF_ANNOT_IS_HIDDEN)
+        annot.update()
+        self.refrescar_pagina(indice)
+
+        def anular() -> None:
+            self.documento.anular_cambio(previo)
+            self.refrescar_pagina(indice)
+
+        def poner(texto: str, estilo: Estilo, rect: pymupdf.Rect) -> None:
+            if texto == texto0 and estilo == estilo0:
+                anular()
+                return
+            pagina = self.documento.pagina(indice)
+            a = pagina.load_annot(xref)
+            if not texto.strip():  # se ha borrado todo: fuera el cuadro
+                pagina.delete_annot(a)
+            else:
+                a.set_flags(a.flags & ~pymupdf.PDF_ANNOT_IS_HIDDEN)
+                a.set_info(content=texto)
+                a.set_rect(rect)
+                a.update(fontsize=estilo.tamano, fontname=FUENTES[estilo.fuente][1], text_color=estilo.rgb)
+            self._modificado(indice)
+
+        self._empezar_edicion(self.paginas[indice], texto=texto0, estilo=estilo0,
+                              ancla=QPointF(visto.x0, visto.y0), al_terminar=poner, al_cancelar=anular,
+                              minimo=(visto.width, visto.height))
+
+    def editar_linea(self, indice: int, linea: dict) -> None:
+        """Editar texto: cambia una línea del PDF escribiendo directamente sobre ella."""
+        self.terminar_edicion()
+        estandar = mover.fuente_estandar(linea["fuente"], linea["flags"])
+        c = linea["color"]
+        estilo0 = Estilo({"he": "Helvetica", "ti": "Times", "co": "Courier"}[estandar[:2]],
+                         round(linea["tamano"], 1), QColor((c >> 16) & 255, (c >> 8) & 255, c & 255).name(),
+                         negrita=estandar.endswith(("bo", "bi")), cursiva=estandar.endswith(("it", "bi")))
+        texto0 = linea["texto"]
+        origen = pymupdf.Point(linea["origen"])
+        dx, dy = linea["dir"]
+        angulo = round(math.degrees(math.atan2(-dy, dx)))
+        pagina = self.documento.pagina(indice)
+        previo = self.documento.empezar_cambio()
+        r = pymupdf.Rect(linea["rect"])
+        margen = r.height * 0.15
+        r.y0 += margen
+        r.y1 -= margen
+        pagina.add_redact_annot(r, fill=False)
+        pagina.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE, graphics=pymupdf.PDF_REDACT_LINE_ART_NONE)
+        self.refrescar_pagina(indice)
+
+        def anular() -> None:
+            self.documento.anular_cambio(previo)
+            self.refrescar_pagina(indice)
+
+        def poner(texto: str, estilo: Estilo, _rect: pymupdf.Rect) -> None:
+            if texto == texto0 and estilo == estilo0:
+                anular()
+                return
+            if texto.strip():  # vacía: la línea se queda borrada
+                mover.escribir(self.documento.pagina(indice), origen, texto, estilo.codigo, estilo.tamano,
+                               estilo.rgb, angulo)
+            self._modificado(indice)
+
+        self._empezar_edicion(self.paginas[indice], texto=texto0, estilo=estilo0,
+                              ancla=self._ancla(indice, origen, PRIMERA_BASE * estilo0.tamano),
+                              al_terminar=poner, al_cancelar=anular, una_linea=True)
 
     def eliminar_anotacion(self, indice: int, xref: int) -> None:
         pagina = self.documento.pagina(indice)

@@ -14,9 +14,9 @@ from PySide6.QtGui import (
     QColor, QFont, QFontDatabase, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap,
 )
 from PySide6.QtWidgets import (
-    QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QSpinBox, QTabWidget,
+    QListWidgetItem, QMessageBox, QPushButton, QSizePolicy, QSpacerItem, QTabWidget,
     QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -101,86 +101,6 @@ def imagen_a_png(img: QImage) -> bytes:
     buf.open(QIODevice.WriteOnly)
     img.save(buf, "PNG")
     return bytes(ba.data())
-
-
-# ----------------------------------------------------------------------------
-# Botón de color
-# ----------------------------------------------------------------------------
-class BotonColor(QPushButton):
-    def __init__(self, color: QColor, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(QSize(34, 24))
-        self.set_color(color)
-        self.clicked.connect(self._elegir)
-
-    def set_color(self, color: QColor) -> None:
-        self.color = QColor(color)
-        self.setStyleSheet(
-            f"background-color: {self.color.name()}; border: 1px solid #888; border-radius: 4px;"
-        )
-
-    def _elegir(self) -> None:
-        c = QColorDialog.getColor(self.color, self, "Elegir color")
-        if c.isValid():
-            self.set_color(c)
-
-
-# ----------------------------------------------------------------------------
-# Texto
-# ----------------------------------------------------------------------------
-FUENTES_PDF = {
-    "Helvetica": ("helv", "Helv"),
-    "Times": ("tiro", "TiRo"),
-    "Courier": ("cour", "Cour"),
-}
-
-
-class DialogoTexto(QDialog):
-    def __init__(self, parent=None, titulo="Añadir texto", texto="", tamano=12.0,
-                 color=QColor(0, 0, 0), fuente="Helvetica", mostrar_formato=True):
-        super().__init__(parent)
-        self.setWindowTitle(titulo)
-        self.resize(460, 260)
-        capa = QVBoxLayout(self)
-        self.editor = QPlainTextEdit(texto)
-        capa.addWidget(self.editor)
-        fila = QHBoxLayout()
-        self.combo_fuente = QComboBox()
-        self.combo_fuente.addItems(list(FUENTES_PDF))
-        self.combo_fuente.setCurrentText(fuente)
-        self.spin_tam = QDoubleSpinBox()
-        self.spin_tam.setRange(4, 144)
-        self.spin_tam.setValue(tamano)
-        self.spin_tam.setSuffix(" pt")
-        self.boton_color = BotonColor(color)
-        for etiqueta, wid in (("Fuente:", self.combo_fuente), ("Tamaño:", self.spin_tam),
-                              ("Color:", self.boton_color)):
-            fila.addWidget(QLabel(etiqueta))
-            fila.addWidget(wid)
-        fila.addStretch()
-        if mostrar_formato:
-            capa.addLayout(fila)
-        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        botones.accepted.connect(self.accept)
-        botones.rejected.connect(self.reject)
-        capa.addWidget(botones)
-        self.editor.setFocus()
-
-    @property
-    def texto(self) -> str:
-        return self.editor.toPlainText()
-
-    @property
-    def tamano(self) -> float:
-        return self.spin_tam.value()
-
-    @property
-    def color(self) -> QColor:
-        return self.boton_color.color
-
-    @property
-    def fuente(self) -> str:
-        return self.combo_fuente.currentText()
 
 
 # ----------------------------------------------------------------------------

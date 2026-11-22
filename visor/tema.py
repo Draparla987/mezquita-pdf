@@ -188,6 +188,9 @@ def hoja_estilos(p: Paleta) -> str:
     QFrame#pildora QLabel {{ color: {p.texto_suave}; }}
     QFrame#pildora QSpinBox {{ border: none; background: transparent; padding: 2px; font-weight: 600; }}
     QFrame#pildora QComboBox {{ border: none; background: transparent; font-weight: 600; padding: 2px 6px; }}
+    QFrame#pildora QToolButton#botonLetra {{ border: 1px solid {p.borde_fuerte}; border-radius: 8px;
+        padding: 5px 10px; background: {p.superficie}; font-weight: 600; }}
+    QFrame#pildora QToolButton#botonLetra:hover {{ border-color: {p.acento}; }}
     QLabel#toast {{ background: {_rgba('#1E1A19', 0.93)}; color: #FFFFFF; border-radius: 17px;
                     padding: 9px 18px; font-weight: 500; }}
     QFrame#banner {{ border-radius: 10px; }}

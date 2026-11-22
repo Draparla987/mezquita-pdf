@@ -42,6 +42,9 @@ class Documento:
         self._paginas: dict[int, pymupdf.Page] = {}
         self._deshacer: list[bytes] = []
         self._rehacer: list[bytes] = []
+        # Lo llama `instantanea` antes de cada cambio: la vista guarda ahí el texto que se esté
+        # escribiendo sobre la página, para que ningún cambio lo pise
+        self.antes_de_cambiar = None
 
     # --- Información -----------------------------------------------------
     @property
@@ -106,11 +109,25 @@ class Documento:
     # --- Historial ---------------------------------------------------------
     def instantanea(self) -> None:
         """Guarda el estado actual antes de modificar (para poder deshacer)."""
+        if self.antes_de_cambiar is not None:
+            self.antes_de_cambiar()
         self._deshacer.append(self.doc.tobytes())
         if len(self._deshacer) > MAX_HISTORIAL:
             self._deshacer.pop(0)
         self._rehacer.clear()
         self.modificado = True
+
+    def empezar_cambio(self) -> tuple:
+        """Instantánea para un cambio que quizá se anule (p. ej. editar un texto y pulsar Esc)."""
+        previo = (list(self._rehacer), self.modificado)
+        self.instantanea()
+        return previo
+
+    def anular_cambio(self, previo: tuple) -> None:
+        """Vuelve a como estaba antes de `empezar_cambio`, sin dejar rastro en Deshacer."""
+        if self._deshacer:
+            self._cargar(self._deshacer.pop())
+        self._rehacer, self.modificado = list(previo[0]), previo[1]
 
     def puede_deshacer(self) -> bool:
         return bool(self._deshacer)

@@ -53,6 +53,11 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python pruebas/prueba_mover.py
 
+      - name: Escribir texto sobre la página (lo que se ve es lo que queda)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python pruebas/prueba_texto.py
+
       - name: Crear la aplicación
         run: pyinstaller --noconfirm --clean MezquitaPDF.spec
 

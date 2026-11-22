@@ -66,13 +66,23 @@ En Windows funciona igual que en el Mac, con estas equivalencias:
 | Ver | Editar | Firmar |
 |---|---|---|
 | Desplazamiento continuo, zoom (⌘+ / ⌘−, pellizco en el trackpad), ajustar al ancho o a la página | Resaltar, subrayar y tachar texto | Firma manuscrita: dibujada, escrita con letra caligráfica o desde una foto (se quita el fondo) |
-| Miniaturas como en Vista Previa: ↑ ↓ para cambiar de página, ⌫ para borrar, arrastrar para reordenar (también varias con ⌘/⇧) y soltar PDF o imágenes para insertarlos; marcadores | Añadir texto, notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
-| Búsqueda (⌘F, Intro = siguiente) | **Editar y mover texto existente** (clic en una línea para cambiarla; arrástrala, o varias con un recuadro, para moverla; flechas para ajustar) | Sello de tiempo de una TSA (opcional) |
+| Miniaturas como en Vista Previa: ↑ ↓ para cambiar de página, ⌫ para borrar, arrastrar para reordenar (también varias con ⌘/⇧) y soltar PDF o imágenes para insertarlos; marcadores | **Escribir directamente sobre la página** (ver abajo), notas, dibujo libre, rectángulos, elipses y flechas | Firma digital PAdES con certificado `.p12`/`.pfx`, visible (con tu rúbrica) o invisible |
+| Búsqueda (⌘F, Intro = siguiente) | **Editar y mover texto existente** (clic en una línea para cambiarla escribiendo encima; arrástrala, o varias con un recuadro, para moverla; flechas para ajustar) | Sello de tiempo de una TSA (opcional) |
 | Seleccionar y copiar texto | **Borrar zona** (elimina de verdad el contenido) | Verificación de firmas, con un aviso verde/rojo al abrir el documento |
-| Rellenar formularios y seguir enlaces | Insertar imágenes; **mover y redimensionar** lo añadido con *Seleccionar* (arrastrar, esquinas, flechas, ⌫ para borrar); doble clic sobre un texto añadido para editarlo | Certificar el documento (bloquea cambios) |
+| Rellenar formularios y seguir enlaces | Insertar imágenes; **mover y redimensionar** lo añadido con *Seleccionar* (arrastrar, esquinas, flechas, ⌫ para borrar); doble clic sobre un texto añadido para cambiarlo | Certificar el documento (bloquea cambios) |
 | Documentos con contraseña | Girar, insertar, eliminar, mover y extraer páginas | |
 | | **Combinar documentos**: varios PDF (y fotos o escaneos) en uno nuevo, en el orden y con las páginas que elijas | |
 | Imprimir (⌘P) | Deshacer/rehacer (⌘Z / ⇧⌘Z) | |
+
+### Escribir sobre la página
+
+Con la herramienta **Texto**, un clic abre un cuadro justo ahí y lo que escribes aparece sobre el
+documento tal como quedará: con su letra, tamaño, color e interlineado. Encima del cuadro hay una
+barra para cambiar la letra (Helvetica, Times o Courier), el tamaño y el color mientras escribes.
+Intro pasa a la línea siguiente; **⌘↩** (Ctrl+Intro), **Listo** o un clic fuera del cuadro lo
+terminan, y **Esc** lo cancela. Para cambiar un texto añadido, haz clic en él con la herramienta
+Texto (o doble clic con Seleccionar). Con **Editar texto**, un clic en una línea del PDF la abre del
+mismo modo, sobre la página (Intro termina).
 
 ### Pestañas y Ajustes
 
@@ -249,8 +259,9 @@ main.py                 Punto de entrada
 visor/ventana.py        Ventana principal: pestañas, menús, barras, páginas, firmas, impresión
 visor/ajustes.py        Ajustes (⌘,): pestañas o ventanas, zoom inicial y demás opciones por defecto
 visor/vista.py          Renderizado de páginas, zoom y herramientas de edición
+visor/texto_en_linea.py Escribir y cambiar texto directamente sobre la página (cuadro y su barra)
 visor/documento.py      Documento PDF con deshacer/rehacer y guardado incremental
-visor/dialogos.py       Diálogos (texto, firmas manuscritas, certificado, verificación)
+visor/dialogos.py       Diálogos (firmas manuscritas, certificado, verificación)
 visor/firma_digital.py  Firma PAdES y verificación (pyHanko)
 visor/marcas.py         Logotipos propios para la marca de agua del sello
 visor/chrome.py         Lo que hace la app cuando la llama la extensión de Chrome, y su registro
