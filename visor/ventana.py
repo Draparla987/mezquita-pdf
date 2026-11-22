@@ -71,7 +71,7 @@ PISTAS = {
     Herramienta.RESALTAR: "Arrastra sobre el texto para resaltarlo",
     Herramienta.SUBRAYAR: "Arrastra sobre el texto para subrayarlo",
     Herramienta.TACHAR: "Arrastra sobre el texto para tacharlo",
-    Herramienta.TEXTO: "Haz clic donde quieras escribir · clic en un texto añadido para cambiarlo",
+    Herramienta.TEXTO: "Haz clic donde quieras escribir · un texto añadido: clic para cambiarlo, arrástralo para moverlo",
     Herramienta.NOTA: "Haz clic donde quieras dejar la nota",
     Herramienta.DIBUJO: "Dibuja con el ratón o el trackpad",
     Herramienta.RECTANGULO: "Arrastra para dibujar",

@@ -542,7 +542,8 @@ class VistaPDF(QScrollArea):
         return {n: QRectF(q.x() - t / 2, q.y() - t / 2, t, t) for n, q in esquinas.items()}
 
     def _asa_en(self, w: PaginaWidget, pos: QPointF) -> str | None:
-        if self.herramienta != Herramienta.SELECCIONAR or not self._anot_sel or self._anot_sel[0] != w.indice:
+        con_asas = (Herramienta.SELECCIONAR, Herramienta.TEXTO, Herramienta.EDITAR_TEXTO)
+        if self.herramienta not in con_asas or not self._anot_sel or self._anot_sel[0] != w.indice:
             return None
         annot = self._anotacion_sel()
         if not mover.es_redimensionable(annot):
@@ -581,7 +582,9 @@ class VistaPDF(QScrollArea):
             else:
                 self._mover_lineas_sel(*a.get("d", (0, 0)))
         elif tipo == "anot":
-            if not es_click:
+            if es_click and a.get("editar"):  # Texto o Editar texto: un clic en un texto añadido lo abre
+                self.editar_cuadro_texto(a["indice"], self._anot_sel[1])
+            elif not es_click:
                 self._mover_anot_sel(*a.get("d", (0, 0)))
         elif tipo == "asa":
             nuevo = None if es_click else self._rect_redimensionado(w, a)
@@ -620,7 +623,8 @@ class VistaPDF(QScrollArea):
 
     def _hay_seleccion_movil(self) -> bool:
         return ((self.herramienta == Herramienta.EDITAR_TEXTO and bool(self._lineas_sel))
-                or (self.herramienta == Herramienta.SELECCIONAR and self._anot_sel is not None))
+                or (self.herramienta in (Herramienta.SELECCIONAR, Herramienta.TEXTO, Herramienta.EDITAR_TEXTO)
+                    and self._anot_sel is not None))
 
     def keyPressEvent(self, ev) -> None:
         if self._hay_seleccion_movil() and self.documento is not None:
@@ -630,7 +634,7 @@ class VistaPDF(QScrollArea):
                 indice = self._lineas_sel[0] if self._lineas_sel else self._anot_sel[0]
                 m = self.documento.pagina(indice).derotation_matrix
                 v = pymupdf.Point(FLECHAS[k][0] * paso, FLECHAS[k][1] * paso) * m - pymupdf.Point(0, 0) * m
-                if self.herramienta == Herramienta.EDITAR_TEXTO:
+                if self._lineas_sel:
                     self._mover_lineas_sel(v.x, v.y)
                 else:
                     self._mover_anot_sel(v.x, v.y)
@@ -689,6 +693,8 @@ class VistaPDF(QScrollArea):
                 self._anot_sel = None
             if self._arrastre is not None:
                 self.setFocus(Qt.MouseFocusReason)  # para las flechas y ⌫
+        elif h in (Herramienta.TEXTO, Herramienta.EDITAR_TEXTO) and self._agarrar_texto_anadido(w, p, pos):
+            pass  # un texto añadido: arrastrarlo lo mueve; un clic lo abre para cambiarlo
         elif h == Herramienta.EDITAR_TEXTO:
             self.setFocus(Qt.MouseFocusReason)
             linea = self._linea_en(w.indice, p)
@@ -707,6 +713,22 @@ class VistaPDF(QScrollArea):
         elif h == Herramienta.DIBUJO:
             self._trazo = [pos]
         w.update()
+
+    def _agarrar_texto_anadido(self, w: PaginaWidget, p: pymupdf.Point, pos: QPointF) -> bool:
+        """Con Texto o Editar texto, los textos añadidos se mueven arrastrándolos, como las líneas del PDF."""
+        asa = self._asa_en(w, pos)
+        if asa is not None:
+            self._arrastre = {"tipo": "asa", "indice": w.indice, "asa": asa}
+            return True
+        annot = self._anotacion_en(w.indice, p)
+        if annot is None or annot.type[0] != pymupdf.PDF_ANNOT_FREE_TEXT:
+            self._anot_sel = None
+            return False
+        self._lineas_sel = None
+        self._anot_sel = (w.indice, annot.xref)
+        self._arrastre = {"tipo": "anot", "indice": w.indice, "rect": pymupdf.Rect(annot.rect), "editar": True}
+        self.setFocus(Qt.MouseFocusReason)  # para ajustarlo con las flechas
+        return True
 
     def raton_movido(self, w: PaginaWidget, ev) -> None:
         if self.documento is None:
@@ -735,10 +757,22 @@ class VistaPDF(QScrollArea):
 
         # Sin botón pulsado: efectos al pasar el ratón
         p = w.a_pdf(pos)
-        if h == Herramienta.EDITAR_TEXTO:
+        if h in (Herramienta.TEXTO, Herramienta.EDITAR_TEXTO):
+            asa = self._asa_en(w, pos)
+            annot = self._anotacion_en(w.indice, p)
+            anadido = annot is not None and annot.type[0] == pymupdf.PDF_ANNOT_FREE_TEXT
+        if h == Herramienta.TEXTO:
+            if asa is not None:
+                w.setCursor(Qt.SizeFDiagCursor if asa in ("tl", "br") else Qt.SizeBDiagCursor)
+            else:
+                w.setCursor(Qt.SizeAllCursor if anadido else Qt.IBeamCursor)
+        elif h == Herramienta.EDITAR_TEXTO:
             linea = self._linea_en(w.indice, p)
             nueva = (w.indice, linea["rect"]) if linea else None
-            w.setCursor(Qt.SizeAllCursor if linea else Qt.CrossCursor)
+            if asa is not None:
+                w.setCursor(Qt.SizeFDiagCursor if asa in ("tl", "br") else Qt.SizeBDiagCursor)
+            else:
+                w.setCursor(Qt.SizeAllCursor if linea or anadido else Qt.CrossCursor)
             if nueva != self._hover_linea:
                 self._hover_linea = nueva
                 w.update()

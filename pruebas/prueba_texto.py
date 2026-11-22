@@ -74,6 +74,25 @@ def escribir(widget, texto: str) -> None:
             QApplication.sendEvent(widget, QKeyEvent(tipo, Qt.Key_unknown, Qt.NoModifier, letra))
 
 
+def clic_real(widget) -> None:
+    """Clic como los de verdad: entra por la ventana (así Qt decide a quién da el foco) y con una
+    pausa entre pulsar y soltar. Con QTest.mouseClick sobre el botón, el fallo del color no se veía."""
+    punto = widget.mapTo(widget.window(), widget.rect().center())
+    QTest.mousePress(widget.window().windowHandle(), Qt.LeftButton, Qt.NoModifier, punto)
+    QTest.qWait(40)
+    QTest.mouseRelease(widget.window().windowHandle(), Qt.LeftButton, Qt.NoModifier, punto)
+    QTest.qWait(20)
+
+
+def arrastrar(desde, hasta) -> None:
+    QTest.mousePress(w, Qt.LeftButton, Qt.NoModifier, desde)
+    for i in range(1, 7):
+        QTest.mouseMove(w, desde + (hasta - desde) * i / 6)
+        QTest.qWait(10)
+    QTest.mouseRelease(w, Qt.LeftButton, Qt.NoModifier, hasta)
+    QTest.qWait(30)
+
+
 def captura_pagina() -> QImage:
     return vista.contenedor.grab(w.geometry()).toImage()
 
@@ -90,6 +109,13 @@ escribir(e.cuadro, "Hola, ¿qué tal?")
 QTest.keyClick(e.cuadro, Qt.Key_Return)
 escribir(e.cuadro, "Segunda línea con ñ y €")
 assert vista._edicion is e, "Intro hace un salto de línea, no termina"
+clic_real(e.barra.muestras[3])
+assert vista._edicion is e and e.estilo.color == "#1c7ed6", "un clic en otro color lo cambia (y no termina)"
+clic_real(e.barra.muestras[0])
+assert vista._edicion is e and e.estilo.color == "#000000"
+clic_real(e.caja)
+assert vista._edicion is e, "un clic en el recuadro tampoco termina"
+print("  ✔ los colores y el recuadro se pueden pulsar sin que se cierre el cuadro")
 e.barra.spin.setValue(16)  # la letra cambia de tamaño en el cuadro al momento
 QTest.qWait(50)
 e.barra.hide()
@@ -132,9 +158,11 @@ a = v.documento.pagina(0).load_annot(xref)
 assert a.flags & pymupdf.PDF_ANNOT_IS_HIDDEN, "mientras se edita, el original no se dibuja debajo"
 e.cuadro.selectAll()
 escribir(e.cuadro, "Texto cambiado")
+clic_real(e.barra.muestras[3])
 e.terminar()
 a = v.documento.pagina(0).load_annot(xref)
 assert a.info["content"] == "Texto cambiado" and not a.flags & pymupdf.PDF_ANNOT_IS_HIDDEN
+assert "0.109804 0.494118 0.839216 rg" in v.documento.doc.xref_get_key(xref, "DA")[1], "se guarda el color nuevo"
 assert len(v.documento._deshacer) == pasos + 1, "un solo paso para deshacer"
 print("  ✔ un texto añadido se cambia escribiendo sobre él")
 
@@ -188,6 +216,21 @@ QTest.keyClick(e.cuadro, Qt.Key_Return)
 assert vista._edicion is None
 assert "Línea corregida" in v.documento.pagina(0).get_text()
 print("  ✔ una línea del PDF se cambia escribiendo sobre ella")
+
+# 7. Un texto añadido se mueve arrastrándolo también con Texto y con Editar texto (un clic lo abre)
+for herramienta in (Herramienta.TEXTO, Herramienta.EDITAR_TEXTO):
+    v.set_herramienta(herramienta)
+    a = next(x for x in v.documento.pagina(0).annots() if x.info["content"] == "Texto cambiado")
+    antes = pymupdf.Rect(a.rect)
+    centro = w.a_pantalla(antes).center().toPoint()
+    arrastrar(centro, centro + QPoint(80, 40))
+    a = next(x for x in v.documento.pagina(0).annots() if x.info["content"] == "Texto cambiado")
+    assert vista._edicion is None and abs(a.rect.x0 - antes.x0 - 40) < 2 and abs(a.rect.y0 - antes.y0 - 20) < 2, \
+        (herramienta, antes, a.rect)
+    QTest.mouseClick(w, Qt.LeftButton, Qt.NoModifier, w.a_pantalla(a.rect).center().toPoint())
+    assert vista._edicion is not None and vista._edicion.texto() == "Texto cambiado", herramienta
+    vista.cancelar_edicion()
+print("  ✔ un texto añadido se mueve arrastrándolo con Texto y con Editar texto")
 
 v.documento.modificado = False
 v.close()

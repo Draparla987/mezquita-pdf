@@ -257,6 +257,11 @@ class EdicionTexto(QObject):
         self.cuadro.setPlaceholderText("Escribe aquí")
         capa.addWidget(self.cuadro)
         self.barra = BarraTexto(lienzo, estilo)
+        # Un clic en la barra o en el recuadro deja el foco en el cuadro. Si no, Qt se lo daría a la
+        # vista de debajo y la edición terminaría antes de cambiar el color o el tamaño
+        for wid in (self.barra, self.caja):
+            wid.setFocusPolicy(Qt.ClickFocus)
+            wid.setFocusProxy(self.cuadro)
 
         self._aplicar_estilo()
         self.cuadro.setPlainText(texto)
@@ -268,6 +273,7 @@ class EdicionTexto(QObject):
         self.cuadro.foco_perdido.connect(lambda: QTimer.singleShot(0, self._comprobar_foco))
         self.barra.cambiada.connect(self._estilo_cambiado)
         self.barra.listo.connect(self.terminar)
+        self.barra.boton_letra.menu().aboutToHide.connect(lambda: QTimer.singleShot(0, self._volver_al_cuadro))
         self.barra.spin.editingFinished.connect(self._volver_al_cuadro)
         self.w.installEventFilter(self)  # la página se mueve o cambia de tamaño (zoom, ventana)
         self.caja.show()
